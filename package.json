@@ -1,0 +1,39 @@
+{
+  "name": "@deva-ai/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Deva API",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Deva-me-AI/deva-sdk.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs",
+    "build:esm": "tsc -p tsconfig.json --module ES2022 --outDir dist/esm --declaration --declarationDir dist/types",
+    "build:cjs": "tsc -p tsconfig.json --module CommonJS --outDir dist/cjs --declaration false --verbatimModuleSyntax false",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
