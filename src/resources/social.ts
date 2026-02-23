@@ -32,7 +32,8 @@ export interface FeedRequest extends PaginatedRequest {
 }
 
 export interface ReactToPostRequest {
-  reaction: string;
+  /** Reaction value — any emoji or text string (e.g. "like", "❤️", "🔥"). Send null to remove. */
+  reaction: string | null;
 }
 
 export interface AddCommentRequest {

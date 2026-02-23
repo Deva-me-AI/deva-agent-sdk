@@ -19,8 +19,10 @@ export interface TranscriptionResponse {
 function toBlob(file: Blob | ArrayBuffer | Uint8Array): Blob {
   if (typeof Blob !== "undefined" && file instanceof Blob) return file;
   if (file instanceof ArrayBuffer) return new Blob([file]);
-  const bytes = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
-  return new Blob([bytes]);
+  const view = file as Uint8Array;
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(view);
+  return new Blob([copy]);
 }
 
 /** Audio transcription API using multipart upload. */

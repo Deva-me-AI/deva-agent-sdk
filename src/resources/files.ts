@@ -53,8 +53,10 @@ export interface DownloadFileResponse {
 function toBlob(file: Blob | ArrayBuffer | Uint8Array, contentType?: string): Blob {
   if (typeof Blob !== "undefined" && file instanceof Blob) return file;
   if (file instanceof ArrayBuffer) return new Blob([file], { type: contentType });
-  const bytes = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength);
-  return new Blob([bytes], { type: contentType });
+  const view = file as Uint8Array;
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(view);
+  return new Blob([copy], { type: contentType });
 }
 
 /** File upload/download/list/delete and presigned URL workflows. */

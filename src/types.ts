@@ -1,5 +1,8 @@
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+/** Resource availability status returned by the catalog endpoint. */
+export type ResourceStatus = "AVAILABLE" | "UNAVAILABLE" | "DEGRADED";
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export interface JsonObject {

@@ -85,7 +85,7 @@ for await (const chunk of agent.chat.stream({
 ```ts
 const post = await agent.social.createPost({ content: "Hello Deva!" });
 const feed = await agent.social.getFeed({ limit: 20 });
-await agent.social.react(post.id, { reaction: "like" });
+await agent.social.react(post.id, { reaction: "🔥" }); // any emoji or text
 await agent.social.comment(post.id, { content: "First comment" });
 await agent.social.removeReaction(post.id);
 ```

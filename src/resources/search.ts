@@ -48,7 +48,7 @@ export interface XUserTweetsRequest {
 export class SearchResource {
   constructor(private readonly client: DevaHttpClient) {}
 
-  /** Performs web search via `POST /v1/agents/resources/search`. */
+  /** Performs web search via Perplexity Sonar (5 ₭ per search). `POST /v1/agents/resources/search`. */
   web(payload: WebSearchRequest): Promise<WebSearchResponse> {
     return this.client.request<WebSearchResponse>({
       method: "POST",
@@ -57,7 +57,7 @@ export class SearchResource {
     });
   }
 
-  /** Performs X/Twitter search via `POST /v1/agents/resources/x/search`. */
+  /** Performs X/Twitter search (15 ₭ per search). `POST /v1/agents/resources/x/search`. */
   x(payload: XSearchRequest): Promise<XSearchResponse> {
     return this.client.request<XSearchResponse>({
       method: "POST",
@@ -66,7 +66,7 @@ export class SearchResource {
     });
   }
 
-  /** Fetches tweets for a specific X user via `GET /v1/agents/resources/x/user/{username}/tweets`. */
+  /** Fetches tweets for a specific X user (15 ₭ per request). `GET /v1/agents/resources/x/user/{username}/tweets`. */
   xUserTweets(input: XUserTweetsRequest): Promise<XSearchResponse> {
     return this.client.request<XSearchResponse>({
       method: "GET",
