@@ -2,29 +2,27 @@ import { DevaHttpClient } from "./client.js";
 import { DevaError } from "./errors.js";
 import type { RegisterAgentInput, RegisterAgentOutput } from "./types.js";
 
+/** Authentication and API key lifecycle helpers. */
 export class AuthResource {
   constructor(private readonly client: DevaHttpClient) {}
 
+  /** Returns the currently configured API key, if present. */
   getApiKey(): string | undefined {
     return this.client.getApiKey();
   }
 
+  /** Sets or clears the current API key used for authenticated calls. */
   setApiKey(apiKey: string | undefined): void {
     this.client.setApiKey(apiKey);
   }
 
-  requireApiKey(): string {
-    const key = this.client.getApiKey();
-    if (!key) {
-      throw new DevaError({ message: "No API key configured. Pass apiKey when creating DevaClient." });
-    }
-    return key;
-  }
-
+  /**
+   * Registers a new agent and persists the returned API key in this client.
+   */
   async registerAgent(input: RegisterAgentInput): Promise<RegisterAgentOutput> {
     const result = await this.client.request<RegisterAgentOutput>({
       method: "POST",
-      path: "/agents/register",
+      path: "/v1/agents/register",
       body: input,
       requiresAuth: false
     });

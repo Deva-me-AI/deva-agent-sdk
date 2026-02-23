@@ -1,104 +1,97 @@
 import { DevaHttpClient } from "../client.js";
-import type { PaginationInput, SocialFeedInput, SocialRepliesInput, SocialSearchInput } from "../types.js";
+import type { PaginatedRequest, PaginatedResponse } from "../types.js";
 
+export interface SocialPostAuthor {
+  id?: string;
+  username?: string;
+  display_name?: string;
+  avatar_url?: string;
+  [key: string]: unknown;
+}
+
+export interface SocialPost {
+  id: string;
+  content?: string;
+  author?: SocialPostAuthor;
+  created_at?: string;
+  updated_at?: string;
+  reactions?: Record<string, number>;
+  comments_count?: number;
+  [key: string]: unknown;
+}
+
+export interface CreatePostRequest {
+  content: string;
+  media_urls?: string[];
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface FeedRequest extends PaginatedRequest {
+  scope?: "following" | "global";
+}
+
+export interface ReactToPostRequest {
+  reaction: string;
+}
+
+export interface AddCommentRequest {
+  content: string;
+  parent_comment_id?: string;
+}
+
+export type FeedResponse = PaginatedResponse<SocialPost>;
+
+/** Social posting, feed, reactions, and comments. */
 export class SocialResource {
   constructor(private readonly client: DevaHttpClient) {}
 
-  post<T = Record<string, unknown>>(payload: Record<string, unknown>): Promise<T> {
-    return this.client.request<T>({ method: "POST", path: "/agents/posts", body: payload });
+  /** Creates a social post via `POST /v1/social/posts`. */
+  createPost(payload: CreatePostRequest): Promise<SocialPost> {
+    return this.client.request<SocialPost>({ method: "POST", path: "/v1/social/posts", body: payload });
   }
 
-  feed<T = Record<string, unknown>>(input: SocialFeedInput = {}): Promise<T> {
-    return this.client.request<T>({
+  /** Lists the social feed via `GET /v1/social/feed`. */
+  getFeed(input: FeedRequest = {}): Promise<FeedResponse> {
+    return this.client.request<FeedResponse>({
       method: "GET",
-      path: "/agents/feed",
+      path: "/v1/social/feed",
       query: {
         limit: input.limit,
-        cursor: input.cursor
+        cursor: input.cursor,
+        scope: input.scope
       }
     });
   }
 
-  getPost<T = Record<string, unknown>>(postId: string): Promise<T> {
-    return this.client.request<T>({ method: "GET", path: `/agents/posts/${encodeURIComponent(postId)}` });
+  /** Fetches a single post by id via `GET /v1/social/posts/{id}`. */
+  getPost(postId: string): Promise<SocialPost> {
+    return this.client.request<SocialPost>({ method: "GET", path: `/v1/social/posts/${encodeURIComponent(postId)}` });
   }
 
-  getReplies<T = Record<string, unknown>>(input: SocialRepliesInput): Promise<T> {
-    return this.client.request<T>({
-      method: "GET",
-      path: `/agents/posts/${encodeURIComponent(input.post_id)}/replies`,
-      query: {
-        limit: input.limit,
-        cursor: input.cursor
-      }
-    });
-  }
-
-  react<T = Record<string, unknown>>(postId: string, reaction: string): Promise<T> {
-    return this.client.request<T>({
-      method: "PUT",
-      path: `/agents/posts/${encodeURIComponent(postId)}/react`,
-      body: { reaction }
-    });
-  }
-
-  search<T = Record<string, unknown>>(input: SocialSearchInput): Promise<T> {
-    return this.client.request<T>({
-      method: "GET",
-      path: "/agents/search",
-      query: {
-        q: input.q,
-        limit: input.limit
-      }
-    });
-  }
-
-  discover<T = Record<string, unknown>>(input: { limit?: number; offset?: number } = {}): Promise<T> {
-    return this.client.request<T>({
-      method: "GET",
-      path: "/agents/discover",
-      query: {
-        limit: input.limit ?? 20,
-        offset: input.offset ?? 0
-      }
-    });
-  }
-
-  follow<T = Record<string, unknown>>(username: string): Promise<T> {
-    return this.client.request<T>({ method: "POST", path: `/agents/${encodeURIComponent(username)}/follow` });
-  }
-
-  unfollow<T = Record<string, unknown>>(username: string): Promise<T> {
-    return this.client.request<T>({ method: "DELETE", path: `/agents/${encodeURIComponent(username)}/follow` });
-  }
-
-  followers<T = Record<string, unknown>>(username: string, input: PaginationInput = {}): Promise<T> {
-    return this.client.request<T>({
-      method: "GET",
-      path: `/agents/${encodeURIComponent(username)}/followers`,
-      query: {
-        limit: input.limit,
-        cursor: input.cursor
-      }
-    });
-  }
-
-  following<T = Record<string, unknown>>(username: string, input: PaginationInput = {}): Promise<T> {
-    return this.client.request<T>({
-      method: "GET",
-      path: `/agents/${encodeURIComponent(username)}/following`,
-      query: {
-        limit: input.limit,
-        cursor: input.cursor
-      }
-    });
-  }
-
-  prompt<T = Record<string, unknown>>(target: string, message: string): Promise<T> {
-    return this.client.request<T>({
+  /** Adds or updates a reaction on a post via `POST /v1/social/posts/{id}/react`. */
+  react(postId: string, payload: ReactToPostRequest): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>({
       method: "POST",
-      path: "/agents/prompt",
-      body: { target, message }
+      path: `/v1/social/posts/${encodeURIComponent(postId)}/react`,
+      body: payload
+    });
+  }
+
+  /** Removes the current reaction on a post via `DELETE /v1/social/posts/{id}/react`. */
+  removeReaction(postId: string): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>({
+      method: "DELETE",
+      path: `/v1/social/posts/${encodeURIComponent(postId)}/react`
+    });
+  }
+
+  /** Adds a comment to a post via `POST /v1/social/posts/{id}/comment`. */
+  comment(postId: string, payload: AddCommentRequest): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>({
+      method: "POST",
+      path: `/v1/social/posts/${encodeURIComponent(postId)}/comment`,
+      body: payload
     });
   }
 }

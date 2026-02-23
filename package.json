@@ -28,8 +28,8 @@
   },
   "scripts": {
     "build": "npm run build:esm && npm run build:cjs",
-    "build:esm": "tsc -p tsconfig.json --module ES2022 --outDir dist/esm --declaration --declarationDir dist/types",
-    "build:cjs": "tsc -p tsconfig.json --module CommonJS --outDir dist/cjs --declaration false --verbatimModuleSyntax false",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build"
   },

@@ -1,10 +1,18 @@
-import { DevaError } from "./errors.js";
-import type { PaymentChallenge } from "./errors.js";
-import type { DevaClientOptions, RequestOptions } from "./types.js";
+import { DevaError, X402PaymentRequiredError } from "./errors.js";
+import { createWalletX402Payer, parseX402Challenge } from "./x402.js";
+import type {
+  ApiErrorPayload,
+  DevaClientOptions,
+  RequestOptions,
+  X402Challenge,
+  X402PaymentContext,
+  X402PaymentResult,
+  X402Payer
+} from "./types.js";
 
 const DEFAULT_API_BASE = "https://api.deva.me";
 const DEFAULT_TIMEOUT_MS = 30_000;
-const RETRYABLE = new Set([429, 500, 502, 503]);
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -15,7 +23,7 @@ function toQueryString(query: RequestOptions["query"]): string {
 
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
-    if (value === undefined) continue;
+    if (value === undefined || value === null) continue;
     params.set(key, String(value));
   }
 
@@ -23,51 +31,31 @@ function toQueryString(query: RequestOptions["query"]): string {
   return output.length > 0 ? `?${output}` : "";
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
+function isBodyInit(value: unknown): value is BodyInit {
+  if (!value) return false;
+  if (typeof value === "string") return true;
+  if (typeof URLSearchParams !== "undefined" && value instanceof URLSearchParams) return true;
+  if (typeof FormData !== "undefined" && value instanceof FormData) return true;
+  if (typeof Blob !== "undefined" && value instanceof Blob) return true;
+  if (typeof ArrayBuffer !== "undefined" && value instanceof ArrayBuffer) return true;
+  if (ArrayBuffer.isView(value)) return true;
+  return false;
 }
 
-function extractPaymentChallenge(payload: unknown, response: Response): PaymentChallenge | undefined {
-  const raw = asRecord(payload);
-  const rawError = asRecord(raw?.error);
-  const fromPayload = asRecord(
-    rawError?.payment_challenge ??
-      rawError?.paymentChallenge ??
-      rawError?.challenge ??
-      raw?.payment_challenge ??
-      raw?.paymentChallenge ??
-      raw?.challenge
-  );
-
-  const scheme =
-    (typeof fromPayload?.scheme === "string" ? fromPayload.scheme : undefined) ??
-    response.headers.get("x-payment-scheme") ??
-    response.headers.get("payment-scheme") ??
-    undefined;
-  const network =
-    (typeof fromPayload?.network === "string" ? fromPayload.network : undefined) ??
-    response.headers.get("x-payment-network") ??
-    response.headers.get("payment-network") ??
-    undefined;
-  const amount =
-    (typeof fromPayload?.amount === "string" || typeof fromPayload?.amount === "number" ? fromPayload.amount : undefined) ??
-    response.headers.get("x-payment-amount") ??
-    response.headers.get("payment-amount") ??
-    undefined;
-  const payTo =
-    (typeof fromPayload?.pay_to === "string" ? fromPayload.pay_to : undefined) ??
-    (typeof fromPayload?.payTo === "string" ? fromPayload.payTo : undefined) ??
-    response.headers.get("x-payment-pay-to") ??
-    response.headers.get("x-payment-pay_to") ??
-    response.headers.get("payment-pay-to") ??
-    response.headers.get("payment-pay_to") ??
-    undefined;
-
-  if (scheme || network || amount !== undefined || payTo) {
-    return { scheme, network, amount, pay_to: payTo };
+function asApiErrorPayload(payload: unknown): ApiErrorPayload {
+  if (payload && typeof payload === "object") {
+    const root = payload as Record<string, unknown>;
+    const err = (root.error ?? root) as Record<string, unknown>;
+    return {
+      code: typeof err.code === "string" ? err.code : undefined,
+      message: typeof err.message === "string" ? err.message : undefined,
+      details: err.details,
+      balance: typeof err.balance === "number" ? err.balance : undefined,
+      required: typeof err.required === "number" ? err.required : undefined
+    };
   }
 
-  return undefined;
+  return {};
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -81,10 +69,14 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+/** Low-level HTTP transport for Deva APIs with retries, auth and x402 support. */
 export class DevaHttpClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly x402Enabled: boolean;
+  private readonly x402MaxRetries: number;
+  private readonly x402Payer?: X402Payer;
   private apiKey?: string;
 
   constructor(options: DevaClientOptions = {}) {
@@ -92,6 +84,19 @@ export class DevaHttpClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? fetch;
     this.apiKey = options.apiKey;
+
+    this.x402Enabled = options.x402?.enabled !== false;
+    this.x402MaxRetries = options.x402?.maxRetries ?? 1;
+    this.x402Payer =
+      options.x402?.payer ??
+      (options.x402?.walletAutoPay
+        ? createWalletX402Payer(
+            this.fetchImpl,
+            this.baseUrl,
+            () => this.apiKey,
+            options.x402?.walletPayPath ?? "/v1/agents/wallet/pay"
+          )
+        : undefined);
   }
 
   setApiKey(apiKey: string | undefined): void {
@@ -106,11 +111,34 @@ export class DevaHttpClient {
     return `${this.baseUrl}${path}${toQueryString(query)}`;
   }
 
+  private async callPayer(
+    challenge: X402Challenge,
+    context: X402PaymentContext,
+    extraHeaders: Record<string, string>
+  ): Promise<boolean> {
+    if (!this.x402Payer) return false;
+
+    const result: X402PaymentResult = await this.x402Payer(challenge, context);
+    if (!result.paid) return false;
+
+    if (result.authorizationHeader) {
+      extraHeaders["x-payment-authorization"] = result.authorizationHeader;
+    }
+
+    if (result.proof) {
+      extraHeaders["x-payment-proof"] = result.proof;
+    }
+
+    return true;
+  }
+
   async request<T>(options: RequestOptions): Promise<T> {
     const url = this.buildUrl(options.path, options.query);
 
     let attempt = 0;
     let waitMs = 300;
+    let paymentRetries = 0;
+    const extraHeaders: Record<string, string> = {};
 
     while (true) {
       const controller = new AbortController();
@@ -118,8 +146,8 @@ export class DevaHttpClient {
 
       try {
         const headers: Record<string, string> = {
-          "content-type": "application/json",
-          ...options.headers
+          ...options.headers,
+          ...extraHeaders
         };
 
         if (options.requiresAuth !== false) {
@@ -129,10 +157,20 @@ export class DevaHttpClient {
           headers.authorization = `Bearer ${this.apiKey}`;
         }
 
+        let body: BodyInit | undefined;
+        if (options.body !== undefined) {
+          if (isBodyInit(options.body)) {
+            body = options.body;
+          } else {
+            headers["content-type"] = headers["content-type"] ?? "application/json";
+            body = JSON.stringify(options.body);
+          }
+        }
+
         const response = await this.fetchImpl(url, {
           method: options.method,
           headers,
-          body: options.body === undefined ? undefined : JSON.stringify(options.body),
+          body,
           signal: controller.signal
         });
 
@@ -142,37 +180,42 @@ export class DevaHttpClient {
           return payload as T;
         }
 
-        const normalized = payload as {
-          error?: {
-            code?: string;
-            message?: string;
-            details?: unknown;
-            balance?: number;
-            required?: number;
-          };
-          code?: string;
-          message?: string;
-          details?: unknown;
-          balance?: number;
-          required?: number;
-        };
+        const errorPayload = asApiErrorPayload(payload);
+        const challenge = response.status === 402 ? parseX402Challenge(response, payload) : undefined;
 
-        const code = normalized.error?.code ?? normalized.code;
-        const message = normalized.error?.message ?? normalized.message ?? `HTTP ${response.status}`;
-        const details = normalized.error?.details ?? normalized.details;
-        const balance = normalized.error?.balance ?? normalized.balance;
-        const required = normalized.error?.required ?? normalized.required;
-        const paymentChallenge = response.status === 402 ? extractPaymentChallenge(payload, response) : undefined;
+        if (
+          response.status === 402 &&
+          challenge &&
+          this.x402Enabled &&
+          options.retryOn402 !== false &&
+          paymentRetries < this.x402MaxRetries
+        ) {
+          const paid = await this.callPayer(
+            challenge,
+            {
+              path: options.path,
+              method: options.method,
+              status: response.status,
+              responseHeaders: response.headers
+            },
+            extraHeaders
+          );
 
-        const error = new DevaError({
+          if (paid) {
+            paymentRetries += 1;
+            continue;
+          }
+        }
+
+        const normalized = {
           status: response.status,
-          code,
-          message,
-          details,
-          balance,
-          required,
-          paymentChallenge
-        });
+          code: errorPayload.code,
+          message: errorPayload.message ?? `HTTP ${response.status}`,
+          details: errorPayload.details,
+          balance: errorPayload.balance,
+          required: errorPayload.required,
+          paymentChallenge: challenge
+        };
 
         if (RETRYABLE.has(response.status) && attempt < 3) {
           await sleep(waitMs);
@@ -181,7 +224,11 @@ export class DevaHttpClient {
           continue;
         }
 
-        throw error;
+        if (response.status === 402) {
+          throw new X402PaymentRequiredError(normalized);
+        }
+
+        throw new DevaError(normalized);
       } catch (error) {
         const isAbort = error instanceof Error && error.name === "AbortError";
 
@@ -213,10 +260,6 @@ export class DevaHttpClient {
   async rawFetch(path: string, init?: RequestInit, query?: RequestOptions["query"]): Promise<Response> {
     const url = this.buildUrl(path, query);
     const headers = new Headers(init?.headers ?? {});
-
-    if (!headers.has("content-type") && init?.body) {
-      headers.set("content-type", "application/json");
-    }
 
     if (!headers.has("authorization")) {
       if (!this.apiKey) {

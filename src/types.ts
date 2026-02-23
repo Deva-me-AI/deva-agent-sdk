@@ -1,115 +1,98 @@
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
 export interface DevaClientOptions {
   apiKey?: string;
   apiBase?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+  x402?: X402Options;
+}
+
+export interface X402Options {
+  enabled?: boolean;
+  maxRetries?: number;
+  walletAutoPay?: boolean;
+  walletPayPath?: string;
+  payer?: X402Payer;
 }
 
 export interface RequestOptions {
   method: HttpMethod;
   path: string;
-  query?: Record<string, string | number | boolean | undefined>;
+  query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
   headers?: Record<string, string>;
   requiresAuth?: boolean;
   timeoutMs?: number;
+  retryOn402?: boolean;
 }
 
 export interface RegisterAgentInput {
   name: string;
   description?: string;
+  metadata?: Record<string, JsonValue>;
 }
 
 export interface RegisterAgentOutput {
   api_key: string;
-  agent?: {
-    name?: string;
-    [key: string]: unknown;
-  };
+  agent?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
-export interface ChatMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-  name?: string;
-}
-
-export interface ChatCompletionRequest {
-  model: string;
-  messages: ChatMessage[];
-  max_tokens?: number;
-  temperature?: number;
-  stream?: boolean;
-  [key: string]: unknown;
-}
-
-export interface ChatCompletionResponse {
-  id?: string;
-  choices?: Array<{
-    index?: number;
-    message?: ChatMessage;
-    finish_reason?: string | null;
-    [key: string]: unknown;
-  }>;
-  [key: string]: unknown;
-}
-
-export interface ChatStreamChunk {
-  id?: string;
-  choices?: Array<{
-    index?: number;
-    delta?: Partial<ChatMessage>;
-    finish_reason?: string | null;
-    [key: string]: unknown;
-  }>;
-  [key: string]: unknown;
-}
-
-export interface PaginationInput {
+export interface PaginatedRequest {
   limit?: number;
   cursor?: string;
 }
 
-export interface KvListInput extends PaginationInput {
-  prefix?: string;
-}
-
-export interface FileListInput extends PaginationInput {
-  prefix?: string;
-}
-
-export interface SocialFeedInput extends PaginationInput {}
-
-export interface SocialRepliesInput extends PaginationInput {
-  post_id: string;
-}
-
-export interface SocialSearchInput {
-  q: string;
-  limit?: number;
-}
-
-export interface EmailInput {
-  to: string | string[];
-  subject: string;
-  body: string;
-  reply_to?: string;
-}
-
-export interface MessagingReplyInput {
-  message_id: string;
-  content: string;
-}
-
-export interface KarmaCostAware {
-  karma_cost?: number;
+export interface PaginatedResponse<T> {
+  data: T[];
+  next_cursor?: string | null;
+  has_more?: boolean;
   [key: string]: unknown;
 }
 
-export function withKarmaCost<T extends Record<string, unknown>>(payload: T): T & { karma_cost: number | null } {
-  const cost = typeof payload.karma_cost === "number" ? payload.karma_cost : null;
-  return { ...payload, karma_cost: cost };
+export interface ApiErrorPayload {
+  code?: string;
+  message?: string;
+  details?: unknown;
+  balance?: number;
+  required?: number;
+  [key: string]: unknown;
 }
+
+export interface X402Challenge {
+  scheme?: string;
+  network?: string;
+  amount?: string | number;
+  pay_to?: string;
+  memo?: string;
+  token?: string;
+  challenge_id?: string;
+  expires_at?: string;
+  raw?: unknown;
+}
+
+export interface X402PaymentContext {
+  path: string;
+  method: HttpMethod;
+  status: number;
+  responseHeaders: Headers;
+}
+
+export interface X402PaymentResult {
+  paid: boolean;
+  authorizationHeader?: string;
+  proof?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type X402Payer = (
+  challenge: X402Challenge,
+  context: X402PaymentContext
+) => Promise<X402PaymentResult>;
