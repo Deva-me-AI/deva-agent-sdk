@@ -3,8 +3,8 @@ import { DevaClient } from "../src/index.js";
 const deva = new DevaClient({ apiKey: "deva_xxx" });
 
 async function main(): Promise<void> {
-  const stream = deva.ai.chatStream({
-    model: "openai/gpt-4o-mini",
+  const stream = deva.chat.stream({
+    model: "gpt-4o-mini",
     messages: [{ role: "user", content: "Write a one-line poem about ocean tides." }]
   });
 
