@@ -8,6 +8,9 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   name?: string;
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+  [key: string]: unknown;
 }
 
 export interface ChatCompletionRequest {
@@ -16,6 +19,10 @@ export interface ChatCompletionRequest {
   max_tokens?: number;
   temperature?: number;
   stream?: boolean;
+  response_format?: { type: "json_object" } | { type: "json_schema"; json_schema: Record<string, unknown> };
+  reasoning?: { effort?: "low" | "medium" | "high"; enabled?: boolean };
+  tools?: unknown[];
+  tool_choice?: unknown;
   [key: string]: unknown;
 }
 
