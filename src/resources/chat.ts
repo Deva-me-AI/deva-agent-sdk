@@ -54,12 +54,12 @@ export class ChatResource {
   constructor(private readonly client: DevaHttpClient) {}
 
   /**
-   * Creates a chat completion via `POST /v1/ai/chat/completions`.
+   * Creates a chat completion via `POST /v1/chat/completions`.
    */
   create(payload: ChatCompletionRequest): Promise<ChatCompletionResponse> {
     return this.client.request<ChatCompletionResponse>({
       method: "POST",
-      path: "/v1/ai/chat/completions",
+      path: "/v1/chat/completions",
       body: payload
     });
   }
@@ -68,7 +68,7 @@ export class ChatResource {
    * Streams chat completion chunks using Server-Sent Events.
    */
   async *stream(payload: ChatCompletionRequest): AsyncGenerator<ChatStreamChunk> {
-    const response = await this.client.rawFetch("/v1/ai/chat/completions", {
+    const response = await this.client.rawFetch("/v1/chat/completions", {
       method: "POST",
       headers: {
         accept: "text/event-stream",

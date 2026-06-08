@@ -59,7 +59,7 @@ const profile = await client.profile.get();
 
 ## Resource API Reference
 
-### Chat (`/v1/ai/chat/completions`)
+### Chat (`/v1/chat/completions`)
 
 ```ts
 const response = await agent.chat.create({
