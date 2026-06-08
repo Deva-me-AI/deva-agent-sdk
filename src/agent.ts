@@ -19,6 +19,7 @@ export class DevaAgent {
   public readonly kv: DevaClient["kv"];
   public readonly email: DevaClient["email"];
   public readonly messaging: DevaClient["messaging"];
+  public readonly models: DevaClient["models"];
   public readonly discover: DevaClient["discover"];
   public readonly profile: DevaClient["profile"];
   public readonly wallet: DevaClient["wallet"];
@@ -42,6 +43,7 @@ export class DevaAgent {
     this.kv = this.client.kv;
     this.email = this.client.email;
     this.messaging = this.client.messaging;
+    this.models = this.client.models;
     this.discover = this.client.discover;
     this.profile = this.client.profile;
     this.wallet = this.client.wallet;
