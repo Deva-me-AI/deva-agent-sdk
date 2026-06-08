@@ -1,7 +1,6 @@
-import { DevaError, X402PaymentRequiredError } from "./errors.js";
+import { DevaError, X402PaymentRequiredError, classifyError, normalizeErrorEnvelope } from "./errors.js";
 import { createWalletX402Payer, parseX402Challenge } from "./x402.js";
 import type {
-  ApiErrorPayload,
   DevaClientOptions,
   RequestOptions,
   X402Challenge,
@@ -42,21 +41,6 @@ function isBodyInit(value: unknown): value is BodyInit {
   return false;
 }
 
-function asApiErrorPayload(payload: unknown): ApiErrorPayload {
-  if (payload && typeof payload === "object") {
-    const root = payload as Record<string, unknown>;
-    const err = (root.error ?? root) as Record<string, unknown>;
-    return {
-      code: typeof err.code === "string" ? err.code : undefined,
-      message: typeof err.message === "string" ? err.message : undefined,
-      details: err.details,
-      balance: typeof err.balance === "number" ? err.balance : undefined,
-      required: typeof err.required === "number" ? err.required : undefined
-    };
-  }
-
-  return {};
-}
 
 async function parseBody(response: Response): Promise<unknown> {
   const text = await response.text();
@@ -180,7 +164,6 @@ export class DevaHttpClient {
           return payload as T;
         }
 
-        const errorPayload = asApiErrorPayload(payload);
         const challenge = response.status === 402 ? parseX402Challenge(response, payload) : undefined;
 
         if (
@@ -207,15 +190,8 @@ export class DevaHttpClient {
           }
         }
 
-        const normalized = {
-          status: response.status,
-          code: errorPayload.code,
-          message: errorPayload.message ?? `HTTP ${response.status}`,
-          details: errorPayload.details,
-          balance: errorPayload.balance,
-          required: errorPayload.required,
-          paymentChallenge: challenge
-        };
+        const normalized = normalizeErrorEnvelope(response.status, payload);
+        normalized.paymentChallenge = challenge;
 
         if (RETRYABLE.has(response.status) && attempt < 3) {
           await sleep(waitMs);
@@ -224,11 +200,11 @@ export class DevaHttpClient {
           continue;
         }
 
-        if (response.status === 402) {
+        if (response.status === 402 && challenge) {
           throw new X402PaymentRequiredError(normalized);
         }
 
-        throw new DevaError(normalized);
+        throw classifyError(normalized);
       } catch (error) {
         const isAbort = error instanceof Error && error.name === "AbortError";
 
