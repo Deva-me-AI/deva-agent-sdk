@@ -50,3 +50,19 @@ test("429 throws RateLimitError; 400 throws InvalidRequestError", async () => {
   const br = new DevaClient({ apiKey: "deva_test", fetch: jsonFetch(400, { error: { type: "invalid_request_error", message: "bad" } }) });
   await assert.rejects(() => br.embeddings.create({ model: "m", input: "hi" }), (e: unknown) => e instanceof InvalidRequestError);
 });
+
+test("402 with a challenge but a declining payer still throws X402PaymentRequiredError", async () => {
+  const client = new DevaClient({
+    apiKey: "deva_test",
+    x402: { payer: async () => ({ paid: false }) },
+    fetch: jsonFetch(402, { error: { message: "pay" } }, {
+      "x-payment-scheme": "exact",
+      "x-payment-pay-to": "0xabc",
+      "x-payment-amount": "1000"
+    })
+  });
+  await assert.rejects(
+    () => client.embeddings.create({ model: "m", input: "hi" }),
+    (err: unknown) => err instanceof X402PaymentRequiredError
+  );
+});
