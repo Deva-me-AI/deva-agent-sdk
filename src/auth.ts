@@ -22,16 +22,17 @@ export class AuthResource {
   async registerAgent(input: RegisterAgentInput): Promise<RegisterAgentOutput> {
     const result = await this.client.request<RegisterAgentOutput>({
       method: "POST",
-      path: "/v1/agents/register",
+      path: "/agents/register",
       body: input,
       requiresAuth: false
     });
 
-    if (!result.api_key) {
+    const apiKey = result.agent?.api_key;
+    if (!apiKey) {
       throw new DevaError({ message: "Registration succeeded but no api_key returned." });
     }
 
-    this.client.setApiKey(result.api_key);
+    this.client.setApiKey(apiKey);
     return result;
   }
 }
