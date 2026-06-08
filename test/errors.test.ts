@@ -61,3 +61,18 @@ test("normalizeErrorEnvelope defaults message and tolerates non-object body", ()
 test("errorFromResponse classifies a raw response body", () => {
   assert.ok(errorFromResponse(429, { error: { type: "rate_limit_error", message: "slow down" } }) instanceof RateLimitError);
 });
+
+test("classifyError prefers type over status", () => {
+  assert.ok(classifyError({ type: "rate_limit_error", status: 400, message: "x" }) instanceof RateLimitError);
+});
+
+test("normalizeErrorEnvelope reads a flat (unwrapped) body", () => {
+  const d = normalizeErrorEnvelope(400, { type: "invalid_request_error", message: "bad", code: "c" });
+  assert.equal(d.type, "invalid_request_error");
+  assert.equal(d.message, "bad");
+  assert.equal(d.code, "c");
+});
+
+test("errorFromResponse classifies by status when body has no type", () => {
+  assert.ok(errorFromResponse(401, null) instanceof AuthenticationError);
+});

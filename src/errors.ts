@@ -162,7 +162,13 @@ export function classifyError(data: NormalizedErrorData): DevaError {
   return new DevaError(data);
 }
 
-/** Builds a typed DevaError from a raw (status, body) pair — used by the streaming/rawFetch paths. */
+/**
+ * Builds a typed DevaError from a raw (status, body) pair — used by the streaming/rawFetch paths.
+ *
+ * NOTE: this does NOT preserve x402 payment challenges — a 402 classifies as InsufficientQuotaError
+ * here. Callers on the x402 payment path (the request<T> transport) must detect the challenge and
+ * throw X402PaymentRequiredError themselves before falling back to this.
+ */
 export function errorFromResponse(status: number, body: unknown): DevaError {
   return classifyError(normalizeErrorEnvelope(status, body));
 }
