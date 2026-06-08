@@ -1,5 +1,5 @@
 import { DevaHttpClient } from "../client.js";
-import { DevaError } from "../errors.js";
+import { DevaError, errorFromResponse } from "../errors.js";
 import type { DevaUsage } from "../types.js";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
@@ -87,8 +87,14 @@ export class ChatResource {
     });
 
     if (!response.ok) {
-      const message = await response.text();
-      throw new DevaError({ status: response.status, message: message || `HTTP ${response.status}` });
+      const text = await response.text();
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = { error: { message: text } };
+      }
+      throw errorFromResponse(response.status, body);
     }
 
     if (!response.body) {
@@ -113,11 +119,17 @@ export class ChatResource {
           const data = line.slice(5).trim();
           if (!data || data === "[DONE]") continue;
 
+          let parsed: unknown;
           try {
-            yield JSON.parse(data) as ChatStreamChunk;
+            parsed = JSON.parse(data);
           } catch {
-            // Skip malformed SSE frames and keep consuming the stream.
+            // Skip malformed (non-JSON) SSE frames and keep consuming the stream.
+            continue;
           }
+          if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).error) {
+            throw errorFromResponse(200, parsed);
+          }
+          yield parsed as ChatStreamChunk;
         }
       }
     }
