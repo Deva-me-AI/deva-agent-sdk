@@ -1,5 +1,6 @@
 import { DevaHttpClient } from "../client.js";
-import { DevaError } from "../errors.js";
+import { DevaError, errorFromResponse } from "../errors.js";
+import type { DevaUsage } from "../types.js";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -7,6 +8,9 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   name?: string;
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+  [key: string]: unknown;
 }
 
 export interface ChatCompletionRequest {
@@ -15,6 +19,10 @@ export interface ChatCompletionRequest {
   max_tokens?: number;
   temperature?: number;
   stream?: boolean;
+  response_format?: { type: "json_object" } | { type: "json_schema"; json_schema: Record<string, unknown> };
+  reasoning?: { effort?: "low" | "medium" | "high"; enabled?: boolean };
+  tools?: unknown[];
+  tool_choice?: unknown;
   [key: string]: unknown;
 }
 
@@ -31,7 +39,7 @@ export interface ChatCompletionResponse {
   created?: number;
   model?: string;
   choices?: ChatChoice[];
-  usage?: Record<string, number>;
+  usage?: DevaUsage;
   [key: string]: unknown;
 }
 
@@ -46,6 +54,7 @@ export interface ChatStreamChunk {
     finish_reason?: string | null;
     [key: string]: unknown;
   }>;
+  usage?: DevaUsage;
   [key: string]: unknown;
 }
 
@@ -78,8 +87,14 @@ export class ChatResource {
     });
 
     if (!response.ok) {
-      const message = await response.text();
-      throw new DevaError({ status: response.status, message: message || `HTTP ${response.status}` });
+      const text = await response.text();
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch {
+        body = { error: { message: text } };
+      }
+      throw errorFromResponse(response.status, body);
     }
 
     if (!response.body) {
@@ -104,11 +119,17 @@ export class ChatResource {
           const data = line.slice(5).trim();
           if (!data || data === "[DONE]") continue;
 
+          let parsed: unknown;
           try {
-            yield JSON.parse(data) as ChatStreamChunk;
+            parsed = JSON.parse(data);
           } catch {
-            // Skip malformed SSE frames and keep consuming the stream.
+            // Skip malformed (non-JSON) SSE frames and keep consuming the stream.
+            continue;
           }
+          if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).error) {
+            throw errorFromResponse(200, parsed);
+          }
+          yield parsed as ChatStreamChunk;
         }
       }
     }

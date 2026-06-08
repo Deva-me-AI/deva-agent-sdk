@@ -37,14 +37,28 @@ export interface RequestOptions {
 }
 
 export interface RegisterAgentInput {
+  /** Unique agent name: 3-30 chars, alphanumeric + underscore (`^[a-zA-Z0-9_]+$`), not a reserved word. */
   name: string;
-  description?: string;
-  metadata?: Record<string, JsonValue>;
+  /** What the agent does: 10-500 characters. Required by the API. */
+  description: string;
+  [key: string]: unknown;
+}
+
+export interface RegisteredAgent {
+  id: string;
+  name: string;
+  /** Returned only at registration — persist it; it is not shown again. */
+  api_key?: string;
+  claim_url?: string;
+  verification_code?: string;
+  profile_url?: string;
+  [key: string]: unknown;
 }
 
 export interface RegisterAgentOutput {
-  api_key: string;
-  agent?: Record<string, unknown>;
+  success?: boolean;
+  agent: RegisteredAgent;
+  important?: string;
   [key: string]: unknown;
 }
 
@@ -99,3 +113,13 @@ export type X402Payer = (
   challenge: X402Challenge,
   context: X402PaymentContext
 ) => Promise<X402PaymentResult>;
+
+export interface DevaUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  completion_tokens_details?: { reasoning_tokens?: number };
+  cost?: number; // USD
+  deva?: { karma_cost: number; karma_balance?: number };
+  [key: string]: unknown;
+}

@@ -1,4 +1,5 @@
 import { DevaHttpClient } from "../client.js";
+import type { DevaUsage } from "../types.js";
 
 export interface EmbeddingsRequest {
   model: string;
@@ -15,7 +16,7 @@ export interface EmbeddingData {
 export interface EmbeddingsResponse {
   data?: EmbeddingData[];
   model?: string;
-  usage?: Record<string, number>;
+  usage?: DevaUsage;
   [key: string]: unknown;
 }
 
