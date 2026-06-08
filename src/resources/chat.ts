@@ -1,5 +1,6 @@
 import { DevaHttpClient } from "../client.js";
 import { DevaError } from "../errors.js";
+import type { DevaUsage } from "../types.js";
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -31,7 +32,7 @@ export interface ChatCompletionResponse {
   created?: number;
   model?: string;
   choices?: ChatChoice[];
-  usage?: Record<string, number>;
+  usage?: DevaUsage;
   [key: string]: unknown;
 }
 
@@ -46,6 +47,7 @@ export interface ChatStreamChunk {
     finish_reason?: string | null;
     [key: string]: unknown;
   }>;
+  usage?: DevaUsage;
   [key: string]: unknown;
 }
 

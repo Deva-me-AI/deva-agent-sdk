@@ -99,3 +99,13 @@ export type X402Payer = (
   challenge: X402Challenge,
   context: X402PaymentContext
 ) => Promise<X402PaymentResult>;
+
+export interface DevaUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  completion_tokens_details?: { reasoning_tokens?: number };
+  cost?: number; // USD
+  deva?: { karma_cost: number; karma_balance?: number };
+  [key: string]: unknown;
+}
