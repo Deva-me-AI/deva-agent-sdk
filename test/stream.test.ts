@@ -48,3 +48,16 @@ test("stream throws a typed error on a non-ok initial response", async () => {
     }
   }, (e: unknown) => e instanceof InvalidRequestError);
 });
+
+test("stream skips malformed (non-JSON) frames without throwing", async () => {
+  const client = new DevaClient({
+    apiKey: "deva_test",
+    fetch: sseFetch('data: {not valid json}\n\ndata: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n')
+  });
+  const chunks: any[] = [];
+  for await (const c of client.chat.stream({ model: "m", messages: [{ role: "user", content: "hi" }] })) {
+    chunks.push(c);
+  }
+  assert.equal(chunks.length, 1);
+  assert.equal(chunks[0].choices[0].delta.content, "hi");
+});
