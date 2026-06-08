@@ -5,6 +5,7 @@ export * from "./embeddings.js";
 export * from "./files.js";
 export * from "./kv.js";
 export * from "./messaging.js";
+export * from "./models.js";
 export * from "./profile.js";
 export * from "./search.js";
 export * from "./social.js";
