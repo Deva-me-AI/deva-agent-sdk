@@ -1,12 +1,15 @@
 {
-  "name": "@deva-ai/sdk",
+  "name": "@deva-me/agent-sdk",
   "version": "0.2.0",
-  "description": "TypeScript SDK for the Deva API",
+  "description": "TypeScript SDK for the Deva Agent Resources API — LLM chat, KV, social, email, and more for autonomous agents (not the \"Login with Deva\" web SDK)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Deva-me-AI/deva-sdk.git"
+    "url": "https://github.com/Deva-me-AI/deva-agent-sdk.git"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",

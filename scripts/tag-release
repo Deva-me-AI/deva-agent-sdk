@@ -1,0 +1,178 @@
+#!/bin/bash
+
+set -e  # Exit on error
+
+# Parse arguments
+DRY_RUN=false
+BUMP_TYPE=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        major|minor|patch)
+            BUMP_TYPE="$arg"
+            ;;
+        *)
+            echo "Error: Unknown argument '$arg'"
+            echo "Usage: $0 <major|minor|patch> [--dry-run]"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate argument
+if [ -z "$BUMP_TYPE" ]; then
+    echo "Usage: $0 <major|minor|patch> [--dry-run]"
+    echo ""
+    echo "Examples:"
+    echo "  $0 patch          # Bump patch version (e.g., 1.0.0 -> 1.0.1)"
+    echo "  $0 minor          # Bump minor version (e.g., 1.0.0 -> 1.1.0)"
+    echo "  $0 major          # Bump major version (e.g., 1.0.0 -> 2.0.0)"
+    echo "  $0 patch --dry-run   # Preview changes without executing"
+    exit 1
+fi
+
+if [ "$DRY_RUN" = true ]; then
+    echo "=== DRY RUN MODE ==="
+fi
+
+# Get current version from package.json
+CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+# Validate current version is not empty
+if [ -z "$CURRENT_VERSION" ]; then
+    echo "Error: Could not read version from package.json"
+    exit 1
+fi
+
+# Validate version format (basic semver check)
+if ! echo "$CURRENT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+    echo "Error: Invalid version format '$CURRENT_VERSION'. Expected semver format (e.g., 1.0.0)"
+    exit 1
+fi
+
+echo "Current version: $CURRENT_VERSION"
+
+# Check for uncommitted changes before we modify anything
+if [ "$DRY_RUN" = false ] && ! git diff-index --quiet HEAD --; then
+    echo "Warning: You have uncommitted changes. Consider committing them before tagging."
+    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Tagging cancelled"
+        exit 0
+    fi
+fi
+
+# Parse version components
+IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+# Increment version based on bump type
+case "$BUMP_TYPE" in
+    major)
+        MAJOR=$((MAJOR + 1))
+        MINOR=0
+        PATCH=0
+        ;;
+    minor)
+        MINOR=$((MINOR + 1))
+        PATCH=0
+        ;;
+    patch)
+        PATCH=$((PATCH + 1))
+        ;;
+esac
+
+VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+echo "New version: $VERSION"
+
+# Update package.json
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN] Would update package.json to version $VERSION"
+else
+    node -e "
+const fs = require('fs');
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+pkg.version = '$VERSION';
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
+    echo "Updated package.json to version $VERSION"
+fi
+
+TAG="v$VERSION"
+
+echo "Package version: $VERSION"
+echo "Tag: $TAG"
+
+# Stage and commit the package.json change
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN] Would commit: chore(package): bump version to $VERSION"
+else
+    git add package.json
+    git commit -m "chore(package): bump version to $VERSION"
+    echo "Committed package.json version bump"
+fi
+
+# Check if tag already exists locally
+if git tag -l | grep -q "^$TAG$"; then
+    echo "Tag $TAG already exists locally"
+    exit 0
+fi
+
+# Check if tag exists on remote
+if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
+    echo "Tag $TAG already exists on remote"
+    exit 0
+fi
+
+# Push commits if needed
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN] Would push commits to remote"
+else
+    # Check if there are unpushed commits
+    if [ -n "$(git log @{u}.. 2>/dev/null)" ]; then
+        echo "Pushing commits to remote..."
+        if git push; then
+            echo "Commits pushed successfully"
+        else
+            echo "Failed to push commits"
+            exit 1
+        fi
+    else
+        echo "No commits to push"
+    fi
+fi
+
+# Create the tag
+if [ "$DRY_RUN" = true ]; then
+    echo "[DRY RUN] Would create tag $TAG"
+    echo "[DRY RUN] Would push tag $TAG to remote"
+else
+    echo "Creating tag $TAG..."
+
+    if git tag "$TAG"; then
+        echo "Tag $TAG created successfully"
+
+        # Push the tag to remote
+        echo "Pushing tag $TAG to remote..."
+
+        if git push origin "$TAG"; then
+            echo "Tag $TAG pushed successfully"
+        else
+            echo "Failed to push tag $TAG"
+            exit 1
+        fi
+    else
+        echo "Failed to create tag $TAG"
+        exit 1
+    fi
+fi
+
+if [ "$DRY_RUN" = true ]; then
+    echo ""
+    echo "=== DRY RUN COMPLETE ==="
+    echo "No changes were made. Run without --dry-run to execute."
+fi
