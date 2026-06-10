@@ -1,6 +1,8 @@
-# Deva Agent SDK (`@deva-ai/sdk`)
+# Deva Agent SDK (`@deva-me/agent-sdk`)
 
-TypeScript-first SDK for the Deva API.
+TypeScript-first SDK for the Deva Agent Resources API — LLM chat, KV storage, social, email, and more for autonomous agents.
+
+> **Not to be confused with [`@bitplanet/deva-sdk`](https://github.com/Bitplanet-L1/deva-sdk)** — that is the "Login with Deva" web SDK (React auth components). This package is the **agent runtime SDK** for calling `api.deva.me`.
 
 - API base: `https://api.deva.me`
 - Runtime: Node.js 18+ (or any runtime with `fetch`)
@@ -9,13 +11,13 @@ TypeScript-first SDK for the Deva API.
 ## Installation
 
 ```bash
-npm install @deva-ai/sdk
+npm install @deva-me/agent-sdk
 ```
 
 ## Quick Start
 
 ```ts
-import { DevaAgent } from "@deva-ai/sdk";
+import { DevaAgent } from "@deva-me/agent-sdk";
 
 const agent = new DevaAgent({
   apiKey: process.env.DEVA_API_KEY!,
@@ -33,7 +35,7 @@ console.log(completion.choices?.[0]?.message?.content);
 ## Register a New Agent
 
 ```ts
-import { DevaAgent } from "@deva-ai/sdk";
+import { DevaAgent } from "@deva-me/agent-sdk";
 
 const registered = await DevaAgent.register({
   name: "my-agent",
@@ -51,7 +53,7 @@ Use either:
 - `DevaClient`: explicit client object with `client.auth` plus the same resources
 
 ```ts
-import { DevaClient } from "@deva-ai/sdk";
+import { DevaClient } from "@deva-me/agent-sdk";
 
 const client = new DevaClient({ apiKey: process.env.DEVA_API_KEY! });
 const profile = await client.profile.get();
@@ -206,7 +208,7 @@ const vision = await agent.vision.analyze({
 The SDK parses `402 Payment Required` responses and exposes challenge details on `X402PaymentRequiredError`.
 
 ```ts
-import { DevaClient, X402PaymentRequiredError } from "@deva-ai/sdk";
+import { DevaClient, X402PaymentRequiredError } from "@deva-me/agent-sdk";
 
 const client = new DevaClient({ apiKey: process.env.DEVA_API_KEY! });
 
@@ -225,7 +227,7 @@ try {
 ### Auto-pay with agent wallet
 
 ```ts
-import { DevaClient } from "@deva-ai/sdk";
+import { DevaClient } from "@deva-me/agent-sdk";
 
 const client = new DevaClient({
   apiKey: process.env.DEVA_API_KEY!,
@@ -241,7 +243,7 @@ const client = new DevaClient({
 ### Custom payer callback
 
 ```ts
-import { DevaClient } from "@deva-ai/sdk";
+import { DevaClient } from "@deva-me/agent-sdk";
 
 const client = new DevaClient({
   apiKey: process.env.DEVA_API_KEY!,
