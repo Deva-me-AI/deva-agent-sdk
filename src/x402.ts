@@ -178,6 +178,15 @@ export function addX402Amounts(left: X402Amount, right: X402Amount): X402Amount 
   };
 }
 
+export function subtractX402Amounts(left: X402Amount, right: X402Amount): X402Amount {
+  const scale = Math.max(left.scale, right.scale);
+  const units = alignAmount(left, scale) - alignAmount(right, scale);
+  return {
+    units: units < 0n ? 0n : units,
+    scale
+  };
+}
+
 export function zeroX402Amount(): X402Amount {
   return { units: 0n, scale: 0 };
 }
@@ -258,12 +267,10 @@ function requestBindingError(challenge: X402Challenge, context: X402PaymentConte
   const path = challenge.request_path?.trim();
   const bodySha256 = normalizeHash(challenge.body_sha256);
   const contextBodySha256 = normalizeHash(context.bodySha256);
-  const contextPathWithQuery = requestPathFromUrl(context.url);
+  const contextPathWithQuery = requestPathFromUrl(context.url) ?? context.path;
 
   const methodMatches = method !== undefined && method === context.method;
-  const targetMatches =
-    (url !== undefined && url === context.url) ||
-    (path !== undefined && (path === context.path || path === contextPathWithQuery));
+  const targetMatches = url !== undefined ? url === context.url : path !== undefined && path === contextPathWithQuery;
   const bodyMatches = bodySha256 !== undefined && bodySha256 === contextBodySha256;
 
   if (methodMatches && targetMatches && bodyMatches) return undefined;
@@ -272,8 +279,12 @@ function requestBindingError(challenge: X402Challenge, context: X402PaymentConte
 }
 
 export function getX402ChallengeReplayKey(challenge: X402Challenge): string | undefined {
-  if (challenge.challenge_id) return `challenge_id:${challenge.challenge_id}`;
-  if (challenge.token) return `token:${challenge.token}`;
+  const challengeId = challenge.challenge_id?.trim();
+  if (challengeId) return `challenge_id:${challengeId}`;
+
+  const token = challenge.token?.trim();
+  if (token) return `token:${token}`;
+
   return undefined;
 }
 
@@ -313,15 +324,22 @@ export function validateX402AutoPay(
     return { allowed: false, amount, reason: "x402 challenge exceeds the cumulative auto-pay cap." };
   }
 
-  if (challenge.expires_at) {
-    const expiresAt = Date.parse(challenge.expires_at);
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-      return { allowed: false, amount, reason: "x402 challenge is expired." };
-    }
+  const expiresAtText = challenge.expires_at?.trim();
+  if (!expiresAtText) {
+    return { allowed: false, amount, reason: "x402 challenge expiry is required for auto-pay." };
+  }
+
+  const expiresAt = Date.parse(expiresAtText);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    return { allowed: false, amount, reason: "x402 challenge is expired." };
   }
 
   const replayKey = getX402ChallengeReplayKey(challenge);
-  if (replayKey && paidChallengeKeys.has(replayKey)) {
+  if (!replayKey) {
+    return { allowed: false, amount, reason: "x402 challenge replay identifier is required for auto-pay." };
+  }
+
+  if (paidChallengeKeys.has(replayKey)) {
     return { allowed: false, amount, replayKey, reason: "x402 challenge was already paid by this client." };
   }
 

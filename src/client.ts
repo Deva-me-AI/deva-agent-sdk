@@ -5,6 +5,7 @@ import {
   formatX402Amount,
   normalizeX402AutoPayPolicy,
   parseX402Challenge,
+  subtractX402Amounts,
   validateX402AutoPay,
   zeroX402Amount
 } from "./x402.js";
@@ -193,6 +194,17 @@ export class DevaHttpClient {
 
     let paidAmount: X402Amount | undefined;
     let replayKey: string | undefined;
+    let reserved = false;
+
+    const rollbackReservation = () => {
+      if (!reserved || !paidAmount) return;
+
+      this.x402CumulativeSpent = subtractX402Amounts(this.x402CumulativeSpent, paidAmount);
+      if (replayKey) {
+        this.x402PaidChallengeKeys.delete(replayKey);
+      }
+      reserved = false;
+    };
 
     if (this.x402AutoPayPolicy) {
       const validation = validateX402AutoPay(
@@ -207,10 +219,28 @@ export class DevaHttpClient {
 
       paidAmount = validation.amount;
       replayKey = validation.replayKey;
+
+      if (paidAmount) {
+        this.x402CumulativeSpent = addX402Amounts(this.x402CumulativeSpent, paidAmount);
+        if (replayKey) {
+          this.x402PaidChallengeKeys.add(replayKey);
+        }
+        reserved = true;
+      }
     }
 
-    const result: X402PaymentResult = await this.x402Payer(challenge, context);
-    if (!result.paid) return { paid: false };
+    let result: X402PaymentResult;
+    try {
+      result = await this.x402Payer(challenge, context);
+    } catch (error) {
+      rollbackReservation();
+      throw error;
+    }
+
+    if (!result.paid) {
+      rollbackReservation();
+      return { paid: false };
+    }
 
     if (result.authorizationHeader) {
       extraHeaders["x-payment-authorization"] = result.authorizationHeader;
@@ -218,14 +248,6 @@ export class DevaHttpClient {
 
     if (result.proof) {
       extraHeaders["x-payment-proof"] = result.proof;
-    }
-
-    if (paidAmount) {
-      this.x402CumulativeSpent = addX402Amounts(this.x402CumulativeSpent, paidAmount);
-    }
-
-    if (replayKey) {
-      this.x402PaidChallengeKeys.add(replayKey);
     }
 
     return { paid: true, amount: paidAmount };

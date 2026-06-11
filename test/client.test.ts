@@ -36,6 +36,10 @@ interface AutoPayFetchOptions {
   challengeId?: string | ((challengeNumber: number) => string);
   requestHashOverride?: string;
   omitRequestHash?: boolean;
+  fallbackRequestBinding?: boolean;
+  requestPath?: string | ((url: string) => string);
+  omitExpiresAt?: boolean;
+  omitReplayIdentifier?: boolean;
   expiresAt?: string;
 }
 
@@ -59,20 +63,31 @@ function walletAutoPayFetch(walletRequests: unknown[], options: AutoPayFetchOpti
       const body = typeof init?.body === "string" ? init.body : "";
       const binding = await requestHash(method, url, body);
       const challengeNumber = Math.ceil(apiCalls / 2);
-      const challengeId =
-        typeof options.challengeId === "function"
-          ? options.challengeId(challengeNumber)
-          : options.challengeId ?? `challenge-${challengeNumber}`;
       const challenge: Record<string, string> = {
         scheme: "exact",
         network: options.network ?? "base",
         amount: options.amount ?? "1000",
-        pay_to: options.payTo ?? "0xpayee",
-        challenge_id: challengeId,
-        expires_at: options.expiresAt ?? "2999-01-01T00:00:00.000Z"
+        pay_to: options.payTo ?? "0xpayee"
       };
+
+      if (!options.omitReplayIdentifier) {
+        challenge.challenge_id =
+          typeof options.challengeId === "function"
+            ? options.challengeId(challengeNumber)
+            : options.challengeId ?? `challenge-${challengeNumber}`;
+      }
+
+      if (!options.omitExpiresAt) {
+        challenge.expires_at = options.expiresAt ?? "2999-01-01T00:00:00.000Z";
+      }
+
       if (!options.omitRequestHash) {
         challenge.request_hash = options.requestHashOverride ?? binding.requestHash;
+      } else if (options.fallbackRequestBinding) {
+        challenge.request_method = method;
+        challenge.request_path =
+          typeof options.requestPath === "function" ? options.requestPath(url) : options.requestPath ?? new URL(url).pathname;
+        challenge.body_sha256 = binding.bodySha256;
       }
 
       return new Response(JSON.stringify({ error: { message: "pay", payment_challenge: challenge } }), {
@@ -87,6 +102,79 @@ function walletAutoPayFetch(walletRequests: unknown[], options: AutoPayFetchOpti
       headers: { "content-type": "application/json" }
     });
   }) as unknown as typeof fetch;
+}
+
+interface ConcurrentAutoPayFetchOptions {
+  amount?: string;
+  challengeId?: string | ((challengeNumber: number) => string);
+  walletDelayMs?: number;
+}
+
+function concurrentWalletAutoPayFetch(walletRequests: unknown[], options: ConcurrentAutoPayFetchOptions = {}): typeof fetch {
+  let challengeNumber = 0;
+
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+
+    if (url.endsWith("/v1/agents/wallet/pay")) {
+      walletRequests.push(JSON.parse(String(init?.body ?? "{}")));
+      if (options.walletDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.walletDelayMs));
+      }
+      return new Response(JSON.stringify({ authorization: "payment-token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    if (new Headers(init?.headers).get("x-payment-authorization") === "payment-token") {
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    const method = init?.method ?? "GET";
+    const body = typeof init?.body === "string" ? init.body : "";
+    const binding = await requestHash(method, url, body);
+    challengeNumber += 1;
+    const challengeId =
+      typeof options.challengeId === "function"
+        ? options.challengeId(challengeNumber)
+        : options.challengeId ?? `concurrent-${challengeNumber}`;
+
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "pay",
+          payment_challenge: {
+            scheme: "exact",
+            network: "base",
+            amount: options.amount ?? "1000",
+            pay_to: "0xpayee",
+            challenge_id: challengeId,
+            expires_at: "2999-01-01T00:00:00.000Z",
+            request_hash: binding.requestHash
+          }
+        }
+      }),
+      {
+        status: 402,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  }) as unknown as typeof fetch;
+}
+
+function assertOneAutoPaySuccess(results: PromiseSettledResult<unknown>[]): void {
+  assert.equal(
+    results.filter((result) => result.status === "fulfilled").length,
+    1
+  );
+  assert.equal(
+    results.filter((result) => result.status === "rejected" && result.reason instanceof X402PaymentRequiredError).length,
+    1
+  );
 }
 
 function walletPolicy(overrides: Partial<NonNullable<ConstructorParameters<typeof DevaClient>[0]>["x402"]> = {}) {
@@ -213,6 +301,67 @@ test("wallet auto-pay declines unapproved or unbound challenges", async () => {
   }
 });
 
+test("wallet auto-pay fallback request path must include the query string", async () => {
+  const pathnameOnlyWalletRequests: unknown[] = [];
+  const pathnameOnlyClient = new DevaClient({
+    apiKey: "deva_test",
+    x402: walletPolicy(),
+    fetch: walletAutoPayFetch(pathnameOnlyWalletRequests, {
+      omitRequestHash: true,
+      fallbackRequestBinding: true,
+      requestPath: "/v1/models"
+    })
+  });
+
+  await assert.rejects(
+    () => pathnameOnlyClient.models.list({ limit: 1 }),
+    (err: unknown) => err instanceof X402PaymentRequiredError
+  );
+  assert.equal(pathnameOnlyWalletRequests.length, 0);
+
+  const queryBoundWalletRequests: unknown[] = [];
+  const queryBoundClient = new DevaClient({
+    apiKey: "deva_test",
+    x402: walletPolicy(),
+    fetch: walletAutoPayFetch(queryBoundWalletRequests, {
+      omitRequestHash: true,
+      fallbackRequestBinding: true,
+      requestPath: (url) => {
+        const parsed = new URL(url);
+        return `${parsed.pathname}${parsed.search}`;
+      }
+    })
+  });
+
+  const response = await queryBoundClient.models.list({ limit: 1 });
+
+  assert.deepEqual(response, { data: [] });
+  assert.equal(queryBoundWalletRequests.length, 1);
+  assert.equal(
+    (queryBoundWalletRequests[0] as { challenge: { request_path: string } }).challenge.request_path,
+    "/v1/models?limit=1"
+  );
+});
+
+test("wallet auto-pay requires expiry and replay identifiers", async () => {
+  const cases: AutoPayFetchOptions[] = [{ omitExpiresAt: true }, { omitReplayIdentifier: true }];
+
+  for (const testCase of cases) {
+    const walletRequests: unknown[] = [];
+    const client = new DevaClient({
+      apiKey: "deva_test",
+      x402: walletPolicy(),
+      fetch: walletAutoPayFetch(walletRequests, testCase)
+    });
+
+    await assert.rejects(
+      () => client.embeddings.create({ model: "m", input: "hi" }),
+      (err: unknown) => err instanceof X402PaymentRequiredError
+    );
+    assert.equal(walletRequests.length, 0);
+  }
+});
+
 test("wallet auto-pay enforces cumulative cap and replay guard", async () => {
   const cumulativeWalletRequests: unknown[] = [];
   const cumulativeClient = new DevaClient({
@@ -253,4 +402,118 @@ test("wallet auto-pay enforces cumulative cap and replay guard", async () => {
     (err: unknown) => err instanceof X402PaymentRequiredError
   );
   assert.equal(replayWalletRequests.length, 1);
+});
+
+test("wallet auto-pay rolls back reservations when the payer declines", async () => {
+  let payerCalls = 0;
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (new Headers(init?.headers).get("x-payment-authorization") === "payment-token") {
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    const body = typeof init?.body === "string" ? init.body : "";
+    const binding = await requestHash(method, url, body);
+
+    return new Response(
+      JSON.stringify({
+        error: {
+          message: "pay",
+          payment_challenge: {
+            scheme: "exact",
+            network: "base",
+            amount: "600",
+            pay_to: "0xpayee",
+            challenge_id: "rollback-challenge",
+            expires_at: "2999-01-01T00:00:00.000Z",
+            request_hash: binding.requestHash
+          }
+        }
+      }),
+      {
+        status: 402,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  }) as unknown as typeof fetch;
+
+  const client = new DevaClient({
+    apiKey: "deva_test",
+    x402: walletPolicy({
+      autoPayPolicy: {
+        maxAmount: "1000",
+        maxCumulativeAmount: "1000",
+        allowedNetworks: ["base"],
+        allowedPayees: ["0xpayee"]
+      },
+      payer: async () => {
+        payerCalls += 1;
+        return payerCalls === 1 ? { paid: false } : { paid: true, authorizationHeader: "payment-token" };
+      }
+    }),
+    fetch: fetchImpl
+  });
+
+  await assert.rejects(
+    () => client.embeddings.create({ model: "m", input: "hi" }),
+    (err: unknown) => err instanceof X402PaymentRequiredError
+  );
+  assert.equal(payerCalls, 1);
+
+  const response = await client.embeddings.create({ model: "m", input: "hi" });
+
+  assert.deepEqual(response, { data: [] });
+  assert.equal(payerCalls, 2);
+});
+
+test("wallet auto-pay reserves cumulative cap before awaiting the payer", async () => {
+  const walletRequests: unknown[] = [];
+  const client = new DevaClient({
+    apiKey: "deva_test",
+    x402: walletPolicy({
+      autoPayPolicy: {
+        maxAmount: "1000",
+        maxCumulativeAmount: "1000",
+        allowedNetworks: ["base"],
+        allowedPayees: ["0xpayee"]
+      }
+    }),
+    fetch: concurrentWalletAutoPayFetch(walletRequests, {
+      amount: "600",
+      walletDelayMs: 25
+    })
+  });
+
+  const results = await Promise.allSettled([
+    client.embeddings.create({ model: "m", input: "hi" }),
+    client.embeddings.create({ model: "m", input: "hi" })
+  ]);
+
+  assertOneAutoPaySuccess(results);
+  assert.equal(walletRequests.length, 1);
+});
+
+test("wallet auto-pay reserves replay keys before awaiting the payer", async () => {
+  const walletRequests: unknown[] = [];
+  const client = new DevaClient({
+    apiKey: "deva_test",
+    x402: walletPolicy(),
+    fetch: concurrentWalletAutoPayFetch(walletRequests, {
+      amount: "600",
+      challengeId: "same-challenge",
+      walletDelayMs: 25
+    })
+  });
+
+  const results = await Promise.allSettled([
+    client.embeddings.create({ model: "m", input: "hi" }),
+    client.embeddings.create({ model: "m", input: "hi" })
+  ]);
+
+  assertOneAutoPaySuccess(results);
+  assert.equal(walletRequests.length, 1);
 });
