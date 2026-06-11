@@ -226,6 +226,10 @@ try {
 
 ### Auto-pay with agent wallet
 
+Wallet auto-pay is disabled unless you explicitly enable it and provide a local policy. The SDK validates
+each `402` challenge against the approved amount, cumulative spend, network, payee, scheme, expiry, replay
+identifier, and request binding before it calls the wallet pay endpoint.
+
 ```ts
 import { DevaClient } from "@deva-me/agent-sdk";
 
@@ -235,10 +239,22 @@ const client = new DevaClient({
     enabled: true,
     walletAutoPay: true,
     walletPayPath: "/v1/agents/wallet/pay",
-    maxRetries: 1
+    maxRetries: 1,
+    autoPayPolicy: {
+      // Amount units must match the x402 challenge amount units returned by the API.
+      maxAmount: "1000",
+      maxCumulativeAmount: "5000",
+      allowedNetworks: ["base"],
+      allowedPayees: ["0xApprovedPayeeAddress"],
+      allowedSchemes: ["exact"]
+    }
   }
 });
 ```
+
+If the challenge is missing request-binding fields, exceeds either cap, names a different network or payee, or
+reuses a previously paid challenge ID/token in the same client instance, the SDK declines auto-pay and throws
+`X402PaymentRequiredError` with the parsed challenge.
 
 ### Custom payer callback
 
@@ -250,6 +266,8 @@ const client = new DevaClient({
   x402: {
     enabled: true,
     payer: async (challenge, context) => {
+      // context includes url, bodySha256, and requestHash so custom payers can bind payment
+      // authorization to the exact request that produced the challenge.
       // call your own payment rail/service
       return {
         paid: true,
@@ -278,4 +296,3 @@ Build targets:
 - `dist/esm`
 - `dist/cjs`
 - `dist/types`
-
