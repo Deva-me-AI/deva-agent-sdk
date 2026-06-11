@@ -22,7 +22,21 @@ export interface X402Options {
   maxRetries?: number;
   walletAutoPay?: boolean;
   walletPayPath?: string;
+  autoPayPolicy?: X402AutoPayPolicy;
   payer?: X402Payer;
+}
+
+export interface X402AutoPayPolicy {
+  /** Maximum amount the SDK may pay for one SDK request, in the same units as the challenge amount. */
+  maxAmount: string | number;
+  /** Maximum cumulative amount this client instance may auto-pay, in the same units as the challenge amount. */
+  maxCumulativeAmount: string | number;
+  /** Networks the caller has approved for auto-pay challenges. Compared case-insensitively. */
+  allowedNetworks: readonly string[];
+  /** Payees the caller has approved for auto-pay challenges. Compared exactly after trimming. */
+  allowedPayees: readonly string[];
+  /** Challenge schemes the caller has approved. Defaults to ["exact"]. Compared case-insensitively. */
+  allowedSchemes?: readonly string[];
 }
 
 export interface RequestOptions {
@@ -92,13 +106,25 @@ export interface X402Challenge {
   token?: string;
   challenge_id?: string;
   expires_at?: string;
+  request_hash?: string;
+  request_method?: string;
+  request_path?: string;
+  request_url?: string;
+  body_sha256?: string;
   raw?: unknown;
 }
 
 export interface X402PaymentContext {
   path: string;
+  url?: string;
   method: HttpMethod;
   status: number;
+  bodySha256?: string;
+  bodyHashAlgorithm?: "sha-256";
+  requestHash?: string;
+  requestHashAlgorithm?: "sha-256";
+  autoPayAttempt?: number;
+  autoPaySpent?: string;
   responseHeaders: Headers;
 }
 
