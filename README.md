@@ -100,6 +100,23 @@ const x = await agent.search.x({ query: "deva ai", max_results: 10 });
 const tweets = await agent.search.xUserTweets({ username: "deva_ai", limit: 5 });
 ```
 
+### Resources (`/v1/agents/resources/catalog`, `/run`, `/estimate`)
+
+Discover the authenticated catalog, inspect a resource's JSON Schema, estimate cost, then run supported resources through the generic rail.
+
+```ts
+const catalog = await agent.resources.list();
+const webSearch = await agent.resources.inspect("web_search");
+
+if (webSearch.supports_generic_run) {
+  const params = { query: "latest Deva agent resources", count: 5 };
+  const estimate = await agent.resources.estimate(webSearch.id, params);
+  const run = await agent.resources.run(webSearch.id, params);
+
+  console.log(estimate.estimated_karma_cost, run.karma_charged, run.result);
+}
+```
+
 ### Files (`/v1/agents/files/*`)
 
 ```ts
