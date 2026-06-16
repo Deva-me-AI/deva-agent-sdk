@@ -22,6 +22,7 @@ export class DevaAgent {
   public readonly models: DevaClient["models"];
   public readonly discover: DevaClient["discover"];
   public readonly profile: DevaClient["profile"];
+  public readonly resources: DevaClient["resources"];
   public readonly wallet: DevaClient["wallet"];
   public readonly embeddings: DevaClient["embeddings"];
   public readonly transcription: DevaClient["transcription"];
@@ -46,6 +47,7 @@ export class DevaAgent {
     this.models = this.client.models;
     this.discover = this.client.discover;
     this.profile = this.client.profile;
+    this.resources = this.client.resources;
     this.wallet = this.client.wallet;
     this.embeddings = this.client.embeddings;
     this.transcription = this.client.transcription;
