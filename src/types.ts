@@ -1,12 +1,67 @@
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-/** Resource availability status returned by the catalog endpoint. */
-export type ResourceStatus = "AVAILABLE" | "UNAVAILABLE" | "DEGRADED";
-
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 export interface JsonObject {
   [key: string]: JsonValue;
+}
+
+/** Resource category returned by the agent resources catalog. */
+export type ResourceCategory = "ai" | "infrastructure" | "communication" | "utility" | "storage";
+
+/** Resource availability status returned by the agent resources catalog. */
+export type ResourceStatus = "available" | "degraded" | "unavailable" | "coming_soon" | "maintenance";
+
+export type JsonSchema = JsonObject;
+
+export interface ResourcePricing {
+  unit: string;
+  karma_cost: number;
+  details?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ResourceInfo {
+  id: string;
+  name: string;
+  category: ResourceCategory;
+  description: string;
+  endpoint: string;
+  provider?: string | null;
+  method: string;
+  pricing: ResourcePricing;
+  status: ResourceStatus;
+  auth_required: boolean;
+  rate_limit?: string | null;
+  input_schema: JsonSchema;
+  output_description: string;
+  supports_generic_run: boolean;
+  run_endpoint?: string | null;
+  [key: string]: unknown;
+}
+
+export interface ResourceCatalogResponse {
+  success?: boolean;
+  resources: ResourceInfo[];
+  total?: number;
+  [key: string]: unknown;
+}
+
+export interface ResourceEstimateResponse {
+  success?: boolean;
+  resource_id: string;
+  estimated_karma_cost: number;
+  unit: string;
+  breakdown?: JsonObject | null;
+  [key: string]: unknown;
+}
+
+export interface ResourceRunResponse<T = Record<string, unknown>> {
+  success?: boolean;
+  resource_id: string;
+  karma_charged: number;
+  result: T;
+  [key: string]: unknown;
 }
 
 export interface DevaClientOptions {

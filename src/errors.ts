@@ -101,8 +101,14 @@ export function normalizeErrorEnvelope(status: number, body: unknown): Normalize
 
   if (body && typeof body === "object") {
     const root = body as Record<string, unknown>;
-    const err = (root.error ?? root) as Record<string, unknown>;
-    code = typeof err.code === "string" ? err.code : undefined;
+    const detail = root.detail;
+    const err =
+      root.error && typeof root.error === "object"
+        ? (root.error as Record<string, unknown>)
+        : detail && typeof detail === "object"
+          ? (detail as Record<string, unknown>)
+          : root;
+    code = typeof err.code === "string" ? err.code : typeof err.error === "string" ? err.error : undefined;
     message = typeof err.message === "string" ? err.message : undefined;
     type = typeof err.type === "string" ? err.type : undefined;
     details = err.details;
