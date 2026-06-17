@@ -50,11 +50,37 @@ export interface RequestOptions {
   retryOn402?: boolean;
 }
 
+export interface PayoutWallet {
+  /** Bitplanet v3 wallet format. Compatible with Solana/Agave ed25519 keys. */
+  version: "v3";
+  /** Base58-encoded 32-byte ed25519 public key. */
+  pubkey: string;
+  /** Base58-encoded 64-byte ed25519 secret key. Persist this locally; it is not sent to the API. */
+  secret: string;
+}
+
+export interface SuppliedPayoutWallet {
+  /** Base58-encoded 32-byte ed25519 public key from an external/passkey wallet. */
+  pubkey?: string;
+  /** Alias for callers that prefer Web Crypto-style naming. */
+  publicKey?: string;
+}
+
+export type RegisterAgentPayoutWallet = "generate" | false | SuppliedPayoutWallet;
+
 export interface RegisterAgentInput {
   /** Unique agent name: 3-30 chars, alphanumeric + underscore (`^[a-zA-Z0-9_]+$`), not a reserved word. */
   name: string;
   /** What the agent does: 10-500 characters. Required by the API. */
   description: string;
+  /**
+   * Payout wallet binding for registration.
+   * Defaults to "generate", which creates a local v3 wallet and submits only its pubkey.
+   * Use false to skip SDK keygen, or pass a pubkey/publicKey for an external wallet.
+   */
+  payoutWallet?: RegisterAgentPayoutWallet;
+  /** Base58-encoded payout public key sent to the API. Suppresses SDK keygen when provided. */
+  payout_pubkey?: string;
   [key: string]: unknown;
 }
 
@@ -66,6 +92,7 @@ export interface RegisteredAgent {
   claim_url?: string;
   verification_code?: string;
   profile_url?: string;
+  payout_pubkey?: string;
   [key: string]: unknown;
 }
 
@@ -73,6 +100,8 @@ export interface RegisterAgentOutput {
   success?: boolean;
   agent: RegisteredAgent;
   important?: string;
+  /** Present only when the SDK generated a payout wallet during registration. */
+  payoutWallet?: PayoutWallet;
   [key: string]: unknown;
 }
 

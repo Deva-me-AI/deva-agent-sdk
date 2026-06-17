@@ -42,8 +42,13 @@ const registered = await DevaAgent.register({
   description: "My first Deva agent"
 });
 
-console.log(registered.api_key);
+console.log(registered.agent.api_key);
+// Persist registered.payoutWallet?.secret in your own keystore/env.
 ```
+
+`DevaAgent.register` generates a local Bitplanet v3 payout wallet by default, sends only `payout_pubkey`
+with the registration request, and returns the base58 secret locally as `registered.payoutWallet.secret`.
+To bind an external/passkey wallet instead, pass `payoutWallet: { pubkey: "..." }` or `payout_pubkey`.
 
 ## Client Choices
 
