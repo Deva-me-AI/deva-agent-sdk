@@ -72,13 +72,6 @@ export interface PayoutWallet {
   secret: string;
 }
 
-export interface PayoutWalletSecretStore {
-  /** Reads a locally persisted payout wallet for this API key, if one exists. */
-  get(apiKey: string): Promise<PayoutWallet | undefined>;
-  /** Persists locally generated payout wallet secret material for this API key. */
-  set(apiKey: string, wallet: PayoutWallet): Promise<void>;
-}
-
 export interface SuppliedPayoutWallet {
   /** Base58-encoded 32-byte ed25519 public key from an external/passkey wallet. */
   pubkey?: string;

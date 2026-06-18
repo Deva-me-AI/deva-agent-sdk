@@ -2,13 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DevaClient } from "../dist/esm/index.js";
 
+function testClient(options: ConstructorParameters<typeof DevaClient>[0]): DevaClient {
+  return new DevaClient({ payoutWalletAutoBind: false, ...options });
+}
+
 function jsonFetch(body: unknown): typeof fetch {
   return (async () =>
     new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
 }
 
 test("chat.create surfaces typed usage.cost and usage.deva", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     fetch: jsonFetch({
       id: "c1",

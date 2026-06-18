@@ -1,6 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import bs58 from "bs58";
 import { DevaClient, generatePayoutWallet } from "../dist/esm/index.js";
 
 function registerFetch(body: unknown, status = 200): { fetch: typeof fetch; lastUrl: () => string; lastBody: () => unknown } {
@@ -50,7 +49,7 @@ test("auth.registerAgent throws when the response carries no api_key", async () 
   );
 });
 
-test("auth.registerAgent generates and binds a payout pubkey by default", async () => {
+test("auth.registerAgent does not send payout wallet fields by default", async () => {
   const r = registerFetch({
     success: true,
     agent: { id: "a1", name: "smoke_test", api_key: "deva_nested_key", profile_url: "http://x" },
@@ -61,16 +60,13 @@ test("auth.registerAgent generates and binds a payout pubkey by default", async 
   const result = await client.auth.registerAgent({ name: "smoke_test", description: "a ten-plus char description" });
   const body = r.lastBody() as Record<string, unknown>;
 
-  assert.equal(body.payout_pubkey, result.payoutWallet?.pubkey);
-  assert.equal(typeof body.payout_pubkey, "string");
-  assert.equal(bs58.decode(String(body.payout_pubkey)).length, 32);
+  assert.ok(!("payout_pubkey" in body));
   assert.ok(!("payoutWallet" in body));
   assert.ok(!("secret" in body));
-  assert.equal(result.payoutWallet?.version, "v3");
-  assert.equal(bs58.decode(result.payoutWallet.secret).length, 64);
+  assert.equal(result.payoutWallet, undefined);
 });
 
-test("auth.registerAgent accepts a caller-supplied payout pubkey", async () => {
+test("auth.registerAgent accepts a caller-supplied lazy payout pubkey without sending it during registration", async () => {
   const suppliedWallet = generatePayoutWallet();
   const r = registerFetch({
     success: true,
@@ -85,7 +81,7 @@ test("auth.registerAgent accepts a caller-supplied payout pubkey", async () => {
   });
   const body = r.lastBody() as Record<string, unknown>;
 
-  assert.equal(body.payout_pubkey, suppliedWallet.pubkey);
+  assert.ok(!("payout_pubkey" in body));
   assert.ok(!("payoutWallet" in body));
   assert.equal(result.payoutWallet, undefined);
 });

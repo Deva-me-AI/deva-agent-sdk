@@ -2,13 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DevaClient, InsufficientQuotaError, InvalidRequestError } from "../dist/esm/index.js";
 
+function testClient(options: ConstructorParameters<typeof DevaClient>[0]): DevaClient {
+  return new DevaClient({ payoutWalletAutoBind: false, ...options });
+}
+
 function sseFetch(sse: string, status = 200): typeof fetch {
   return (async () =>
     new Response(sse, { status, headers: { "content-type": "text/event-stream" } })) as unknown as typeof fetch;
 }
 
 test("stream surfaces a mid-stream error frame as a typed error", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     fetch: sseFetch('data: {"error":{"type":"insufficient_quota","message":"out of credits"}}\n\n')
   });
@@ -20,7 +24,7 @@ test("stream surfaces a mid-stream error frame as a typed error", async () => {
 });
 
 test("stream yields chunks (incl. typed final usage) and completes cleanly on [DONE]", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     fetch: sseFetch(
       'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n' +
@@ -38,7 +42,7 @@ test("stream yields chunks (incl. typed final usage) and completes cleanly on [D
 });
 
 test("stream throws a typed error on a non-ok initial response", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     fetch: sseFetch('{"error":{"type":"invalid_request_error","message":"bad"}}', 400)
   });
@@ -50,7 +54,7 @@ test("stream throws a typed error on a non-ok initial response", async () => {
 });
 
 test("stream skips malformed (non-JSON) frames without throwing", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     fetch: sseFetch('data: {not valid json}\n\ndata: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n')
   });
