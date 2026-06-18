@@ -2,6 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DevaClient } from "../dist/esm/index.js";
 
+function testClient(options: ConstructorParameters<typeof DevaClient>[0]): DevaClient {
+  return new DevaClient({ payoutWalletAutoBind: false, ...options });
+}
+
 test("typed request params reach the request body", async () => {
   let captured: any;
   const fetchImpl = (async (_url: string, init: RequestInit) => {
@@ -12,7 +16,7 @@ test("typed request params reach the request body", async () => {
     });
   }) as unknown as typeof fetch;
 
-  const client = new DevaClient({ apiKey: "deva_test", fetch: fetchImpl });
+  const client = testClient({ apiKey: "deva_test", fetch: fetchImpl });
   await client.chat.create({
     model: "m",
     messages: [{ role: "user", content: "hi" }],
@@ -36,7 +40,7 @@ test("tool_choice, tool-capable messages, and json_schema reach the request body
     });
   }) as unknown as typeof fetch;
 
-  const client = new DevaClient({ apiKey: "deva_test", fetch: fetchImpl });
+  const client = testClient({ apiKey: "deva_test", fetch: fetchImpl });
   await client.chat.create({
     model: "m",
     messages: [

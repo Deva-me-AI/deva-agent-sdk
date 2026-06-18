@@ -1,4 +1,5 @@
 import { DevaError, X402PaymentRequiredError, classifyError, normalizeErrorEnvelope } from "./errors.js";
+import { PayoutWalletAutoBinder } from "./payout-wallet-autobind.js";
 import {
   addX402Amounts,
   createWalletX402Payer,
@@ -141,6 +142,7 @@ export class DevaHttpClient {
   private readonly x402MaxRetries: number;
   private readonly x402Payer?: X402Payer;
   private readonly x402AutoPayPolicy?: NormalizedX402AutoPayPolicy;
+  private readonly payoutWalletAutoBinder?: PayoutWalletAutoBinder;
   private x402CumulativeSpent: X402Amount = zeroX402Amount();
   private readonly x402PaidChallengeKeys = new Set<string>();
   private apiKey?: string;
@@ -150,6 +152,17 @@ export class DevaHttpClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.fetchImpl = options.fetch ?? fetch;
     this.apiKey = options.apiKey;
+
+    if (options.payoutWalletAutoBind !== false) {
+      this.payoutWalletAutoBinder = new PayoutWalletAutoBinder({
+        apiBase: options.payoutWalletApiBase ?? this.baseUrl,
+        fetch: this.fetchImpl,
+        timeoutMs: this.timeoutMs,
+        storePath: options.payoutWalletStorePath,
+        payoutWallet: options.payoutWallet,
+        payout_pubkey: options.payout_pubkey
+      });
+    }
 
     this.x402Enabled = options.x402?.enabled !== false;
     this.x402MaxRetries = options.x402?.maxRetries ?? 1;
@@ -180,8 +193,17 @@ export class DevaHttpClient {
     return this.apiKey;
   }
 
+  setPayoutWalletOverride(payoutWallet: DevaClientOptions["payoutWallet"], payoutPubkey?: string): void {
+    this.payoutWalletAutoBinder?.setPayoutWalletOverride(payoutWallet, payoutPubkey);
+  }
+
   buildUrl(path: string, query?: RequestOptions["query"]): string {
     return `${this.baseUrl}${path}${toQueryString(query)}`;
+  }
+
+  private async ensurePayoutWalletBound(options?: { requiresAuth?: boolean }): Promise<void> {
+    if (options?.requiresAuth === false || !this.apiKey || !this.payoutWalletAutoBinder) return;
+    await this.payoutWalletAutoBinder.ensureBound(this.apiKey);
   }
 
   private async callPayer(
@@ -256,6 +278,7 @@ export class DevaHttpClient {
   async request<T>(options: RequestOptions): Promise<T> {
     const url = this.buildUrl(options.path, options.query);
     const preparedBody = await prepareBody(options.body, options.method, url);
+    await this.ensurePayoutWalletBound(options);
 
     let attempt = 0;
     let waitMs = 300;
@@ -380,6 +403,7 @@ export class DevaHttpClient {
   async rawFetch(path: string, init?: RequestInit, query?: RequestOptions["query"]): Promise<Response> {
     const url = this.buildUrl(path, query);
     const headers = new Headers(init?.headers ?? {});
+    await this.ensurePayoutWalletBound();
 
     if (!headers.has("authorization")) {
       if (!this.apiKey) {

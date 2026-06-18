@@ -14,6 +14,19 @@ export interface DevaClientOptions {
   apiBase?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+  /**
+   * Enables automatic first-call payout wallet binding. Defaults to true.
+   * Set false only when the runtime cannot use the local credential store.
+   */
+  payoutWalletAutoBind?: boolean;
+  /** Optional base URL for the payout-wallet contract. Defaults to apiBase. */
+  payoutWalletApiBase?: string;
+  /** Optional local credential-store path. Defaults to ~/.deva/payout-wallet.json. */
+  payoutWalletStorePath?: string;
+  /** Optional external/passkey payout wallet pubkey to bind lazily instead of generating one. */
+  payoutWallet?: RegisterAgentPayoutWallet;
+  /** Optional direct external/passkey payout pubkey. Takes precedence over payoutWallet. */
+  payout_pubkey?: string;
   x402?: X402Options;
 }
 
@@ -50,11 +63,36 @@ export interface RequestOptions {
   retryOn402?: boolean;
 }
 
+export interface PayoutWallet {
+  /** Bitplanet v3 wallet format. Compatible with Solana/Agave ed25519 keys. */
+  version: "v3";
+  /** Base58-encoded 32-byte ed25519 public key. */
+  pubkey: string;
+  /** Base58-encoded 64-byte ed25519 secret key. Persist this locally; it is not sent to the API. */
+  secret: string;
+}
+
+export interface SuppliedPayoutWallet {
+  /** Base58-encoded 32-byte ed25519 public key from an external/passkey wallet. */
+  pubkey?: string;
+  /** Alias for callers that prefer Web Crypto-style naming. */
+  publicKey?: string;
+}
+
+export type RegisterAgentPayoutWallet = "generate" | false | SuppliedPayoutWallet;
+
 export interface RegisterAgentInput {
   /** Unique agent name: 3-30 chars, alphanumeric + underscore (`^[a-zA-Z0-9_]+$`), not a reserved word. */
   name: string;
   /** What the agent does: 10-500 characters. Required by the API. */
   description: string;
+  /**
+   * Optional external/passkey payout wallet pubkey to bind lazily on the first authenticated API call.
+   * Registration itself does not send or require a payout pubkey.
+   */
+  payoutWallet?: RegisterAgentPayoutWallet;
+  /** Optional base58 payout public key to bind lazily. Registration itself does not send it. */
+  payout_pubkey?: string;
   [key: string]: unknown;
 }
 
@@ -66,6 +104,7 @@ export interface RegisteredAgent {
   claim_url?: string;
   verification_code?: string;
   profile_url?: string;
+  payout_pubkey?: string;
   [key: string]: unknown;
 }
 
@@ -73,6 +112,8 @@ export interface RegisterAgentOutput {
   success?: boolean;
   agent: RegisteredAgent;
   important?: string;
+  /** @deprecated Wallets are now generated and stored locally during lazy first-call binding. */
+  payoutWallet?: PayoutWallet;
   [key: string]: unknown;
 }
 

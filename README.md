@@ -42,8 +42,17 @@ const registered = await DevaAgent.register({
   description: "My first Deva agent"
 });
 
-console.log(registered.api_key);
+console.log(registered.agent.api_key);
 ```
+
+Registration does not require or send a payout wallet. On the first authenticated API call, the SDK checks
+`GET /api/v1/agent/payout-wallet`; if no payout pubkey is bound, it generates a local v3 ed25519 wallet,
+stores the secret at `~/.deva/payout-wallet.json` by default, and binds by sending only
+`{ "payout_pubkey": "..." }` to `POST /api/v1/agent/payout-wallet/bind`.
+
+Use `payoutWalletStorePath` to customize the local credential path. To bind an external/passkey wallet
+instead of generating one, pass `payoutWallet: { pubkey: "..." }`, `payoutWallet: { publicKey: "..." }`,
+or `payout_pubkey`; the secret key is never sent to the API.
 
 ## Client Choices
 

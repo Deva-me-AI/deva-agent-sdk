@@ -8,6 +8,10 @@ import {
   X402PaymentRequiredError
 } from "../dist/esm/index.js";
 
+function testClient(options: ConstructorParameters<typeof DevaClient>[0]): DevaClient {
+  return new DevaClient({ payoutWalletAutoBind: false, ...options });
+}
+
 function jsonFetch(status: number, body: unknown, headers: Record<string, string> = {}): typeof fetch {
   return (async () =>
     new Response(JSON.stringify(body), {
@@ -192,7 +196,7 @@ function walletPolicy(overrides: Partial<NonNullable<ConstructorParameters<typeo
 }
 
 test("402 insufficient_quota throws InsufficientQuotaError, not X402", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     fetch: jsonFetch(402, { error: { type: "insufficient_quota", message: "out of credits" } })
   });
@@ -203,7 +207,7 @@ test("402 insufficient_quota throws InsufficientQuotaError, not X402", async () 
 });
 
 test("402 with an x402 challenge still throws X402PaymentRequiredError", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     x402: { enabled: false },
     fetch: jsonFetch(402, { error: { message: "pay" } }, {
@@ -219,15 +223,15 @@ test("402 with an x402 challenge still throws X402PaymentRequiredError", async (
 });
 
 test("429 throws RateLimitError; 400 throws InvalidRequestError", async () => {
-  const rl = new DevaClient({ apiKey: "deva_test", fetch: jsonFetch(429, { error: { type: "rate_limit_error", message: "slow" } }) });
+  const rl = testClient({ apiKey: "deva_test", fetch: jsonFetch(429, { error: { type: "rate_limit_error", message: "slow" } }) });
   await assert.rejects(() => rl.embeddings.create({ model: "m", input: "hi" }), (e: unknown) => e instanceof RateLimitError);
 
-  const br = new DevaClient({ apiKey: "deva_test", fetch: jsonFetch(400, { error: { type: "invalid_request_error", message: "bad" } }) });
+  const br = testClient({ apiKey: "deva_test", fetch: jsonFetch(400, { error: { type: "invalid_request_error", message: "bad" } }) });
   await assert.rejects(() => br.embeddings.create({ model: "m", input: "hi" }), (e: unknown) => e instanceof InvalidRequestError);
 });
 
 test("402 with a challenge but a declining payer still throws X402PaymentRequiredError", async () => {
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     x402: { payer: async () => ({ paid: false }) },
     fetch: jsonFetch(402, { error: { message: "pay" } }, {
@@ -245,7 +249,7 @@ test("402 with a challenge but a declining payer still throws X402PaymentRequire
 test("wallet auto-pay requires an explicit local policy", () => {
   assert.throws(
     () =>
-      new DevaClient({
+      testClient({
         apiKey: "deva_test",
         x402: { walletAutoPay: true }
       }),
@@ -255,7 +259,7 @@ test("wallet auto-pay requires an explicit local policy", () => {
 
 test("wallet auto-pay pays only a policy-approved request-bound challenge", async () => {
   const walletRequests: unknown[] = [];
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     x402: walletPolicy(),
     fetch: walletAutoPayFetch(walletRequests)
@@ -287,7 +291,7 @@ test("wallet auto-pay declines unapproved or unbound challenges", async () => {
 
   for (const testCase of cases) {
     const walletRequests: unknown[] = [];
-    const client = new DevaClient({
+    const client = testClient({
       apiKey: "deva_test",
       x402: walletPolicy(),
       fetch: walletAutoPayFetch(walletRequests, testCase)
@@ -303,7 +307,7 @@ test("wallet auto-pay declines unapproved or unbound challenges", async () => {
 
 test("wallet auto-pay fallback request path must include the query string", async () => {
   const pathnameOnlyWalletRequests: unknown[] = [];
-  const pathnameOnlyClient = new DevaClient({
+  const pathnameOnlyClient = testClient({
     apiKey: "deva_test",
     x402: walletPolicy(),
     fetch: walletAutoPayFetch(pathnameOnlyWalletRequests, {
@@ -320,7 +324,7 @@ test("wallet auto-pay fallback request path must include the query string", asyn
   assert.equal(pathnameOnlyWalletRequests.length, 0);
 
   const queryBoundWalletRequests: unknown[] = [];
-  const queryBoundClient = new DevaClient({
+  const queryBoundClient = testClient({
     apiKey: "deva_test",
     x402: walletPolicy(),
     fetch: walletAutoPayFetch(queryBoundWalletRequests, {
@@ -348,7 +352,7 @@ test("wallet auto-pay requires expiry and replay identifiers", async () => {
 
   for (const testCase of cases) {
     const walletRequests: unknown[] = [];
-    const client = new DevaClient({
+    const client = testClient({
       apiKey: "deva_test",
       x402: walletPolicy(),
       fetch: walletAutoPayFetch(walletRequests, testCase)
@@ -364,7 +368,7 @@ test("wallet auto-pay requires expiry and replay identifiers", async () => {
 
 test("wallet auto-pay enforces cumulative cap and replay guard", async () => {
   const cumulativeWalletRequests: unknown[] = [];
-  const cumulativeClient = new DevaClient({
+  const cumulativeClient = testClient({
     apiKey: "deva_test",
     x402: walletPolicy({
       autoPayPolicy: {
@@ -389,7 +393,7 @@ test("wallet auto-pay enforces cumulative cap and replay guard", async () => {
   assert.equal(cumulativeWalletRequests.length, 1);
 
   const replayWalletRequests: unknown[] = [];
-  const replayClient = new DevaClient({
+  const replayClient = testClient({
     apiKey: "deva_test",
     x402: walletPolicy(),
     fetch: walletAutoPayFetch(replayWalletRequests, { amount: "600", challengeId: "same-challenge" })
@@ -441,7 +445,7 @@ test("wallet auto-pay rolls back reservations when the payer declines", async ()
     );
   }) as unknown as typeof fetch;
 
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     x402: walletPolicy({
       autoPayPolicy: {
@@ -472,7 +476,7 @@ test("wallet auto-pay rolls back reservations when the payer declines", async ()
 
 test("wallet auto-pay reserves cumulative cap before awaiting the payer", async () => {
   const walletRequests: unknown[] = [];
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     x402: walletPolicy({
       autoPayPolicy: {
@@ -499,7 +503,7 @@ test("wallet auto-pay reserves cumulative cap before awaiting the payer", async 
 
 test("wallet auto-pay reserves replay keys before awaiting the payer", async () => {
   const walletRequests: unknown[] = [];
-  const client = new DevaClient({
+  const client = testClient({
     apiKey: "deva_test",
     x402: walletPolicy(),
     fetch: concurrentWalletAutoPayFetch(walletRequests, {
