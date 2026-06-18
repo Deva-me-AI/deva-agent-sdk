@@ -14,6 +14,19 @@ export interface DevaClientOptions {
   apiBase?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+  /**
+   * Enables automatic first-call payout wallet binding. Defaults to true.
+   * Set false only when the runtime cannot use the local credential store.
+   */
+  payoutWalletAutoBind?: boolean;
+  /** Optional base URL for the payout-wallet contract. Defaults to apiBase. */
+  payoutWalletApiBase?: string;
+  /** Optional local credential-store path. Defaults to ~/.deva/payout-wallet.json. */
+  payoutWalletStorePath?: string;
+  /** Optional external/passkey payout wallet pubkey to bind lazily instead of generating one. */
+  payoutWallet?: RegisterAgentPayoutWallet;
+  /** Optional direct external/passkey payout pubkey. Takes precedence over payoutWallet. */
+  payout_pubkey?: string;
   x402?: X402Options;
 }
 
@@ -59,6 +72,13 @@ export interface PayoutWallet {
   secret: string;
 }
 
+export interface PayoutWalletSecretStore {
+  /** Reads a locally persisted payout wallet for this API key, if one exists. */
+  get(apiKey: string): Promise<PayoutWallet | undefined>;
+  /** Persists locally generated payout wallet secret material for this API key. */
+  set(apiKey: string, wallet: PayoutWallet): Promise<void>;
+}
+
 export interface SuppliedPayoutWallet {
   /** Base58-encoded 32-byte ed25519 public key from an external/passkey wallet. */
   pubkey?: string;
@@ -74,12 +94,11 @@ export interface RegisterAgentInput {
   /** What the agent does: 10-500 characters. Required by the API. */
   description: string;
   /**
-   * Payout wallet binding for registration.
-   * Defaults to "generate", which creates a local v3 wallet and submits only its pubkey.
-   * Use false to skip SDK keygen, or pass a pubkey/publicKey for an external wallet.
+   * Optional external/passkey payout wallet pubkey to bind lazily on the first authenticated API call.
+   * Registration itself does not send or require a payout pubkey.
    */
   payoutWallet?: RegisterAgentPayoutWallet;
-  /** Base58-encoded payout public key sent to the API. Suppresses SDK keygen when provided. */
+  /** Optional base58 payout public key to bind lazily. Registration itself does not send it. */
   payout_pubkey?: string;
   [key: string]: unknown;
 }
@@ -100,7 +119,7 @@ export interface RegisterAgentOutput {
   success?: boolean;
   agent: RegisteredAgent;
   important?: string;
-  /** Present only when the SDK generated a payout wallet during registration. */
+  /** @deprecated Wallets are now generated and stored locally during lazy first-call binding. */
   payoutWallet?: PayoutWallet;
   [key: string]: unknown;
 }
