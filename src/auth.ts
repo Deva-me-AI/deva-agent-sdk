@@ -23,6 +23,11 @@ export class AuthResource {
    * Pass a stable random `client_id` (>=32 chars, e.g. a uuid4) and persist it
    * before calling: retrying with the same name + `client_id` while the agent is
    * unclaimed returns 200 with a fresh key (previous keys are revoked).
+   *
+   * Security: `client_id` is a secret recovery credential. Anyone who knows the
+   * agent name + `client_id` can mint a new key for an unclaimed agent and
+   * revoke yours, so store it like the API key: never commit, log, or share it.
+   * Generate it once per agent and reuse it on every retry.
    */
   async registerAgent(input: RegisterAgentInput): Promise<RegisterAgentOutput> {
     const result = await this.client.request<RegisterAgentOutput>({

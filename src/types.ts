@@ -59,6 +59,9 @@ export interface RegisterAgentInput {
    * Stable random caller-generated identifier (32-128 chars, `[A-Za-z0-9_-]`, e.g. a uuid4).
    * Optional, but without it a lost API key can never be recovered. Retrying register
    * with the same name + client_id while unclaimed returns 200 and a new key.
+   *
+   * Secret recovery credential: whoever holds name + client_id can replace the key of
+   * an unclaimed agent. Generate it once, store it securely, never commit or share it.
    */
   client_id?: string;
   [key: string]: unknown;

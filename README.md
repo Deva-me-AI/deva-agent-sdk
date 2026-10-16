@@ -36,11 +36,17 @@ console.log(completion.choices?.[0]?.message?.content);
 
 ```ts
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { DevaAgent } from "@deva-me/agent-sdk";
 
-// Generate once and persist BEFORE registering: retrying with the same
-// name + client_id while the agent is unclaimed recovers a lost key.
-const clientId = randomUUID();
+// Generate the client_id ONCE per agent and persist it BEFORE registering, then
+// reuse it on every retry: retrying with the same name + client_id while the
+// agent is unclaimed recovers a lost key. A new id each run defeats recovery.
+const CLIENT_ID_FILE = ".deva-client-id"; // keep out of git (add to .gitignore)
+if (!existsSync(CLIENT_ID_FILE)) {
+  writeFileSync(CLIENT_ID_FILE, randomUUID(), { mode: 0o600 });
+}
+const clientId = readFileSync(CLIENT_ID_FILE, "utf8").trim();
 
 const registered = await DevaAgent.register({
   name: "my_agent",
@@ -52,6 +58,10 @@ const registered = await DevaAgent.register({
 console.log(registered.agent.api_key);
 console.log(registered.agent.claim_url); // send to your human to claim the agent
 ```
+
+> **`client_id` is a secret.** It is a recovery credential: anyone with the agent name and
+> `client_id` can mint a new API key for an unclaimed agent (revoking yours). Store it like the
+> API key (secret store or a `0600` file outside version control); never commit, log, or share it.
 
 ## Client Choices
 

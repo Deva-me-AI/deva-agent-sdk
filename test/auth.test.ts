@@ -83,3 +83,36 @@ test("auth.registerAgent forwards client_id and accepts the 201 register respons
   assert.equal(result.agent.claim_url, "https://deva.me/claim/x");
   assert.equal(client.getApiKey(), "deva_new_key");
 });
+
+test("auth.registerAgent recovery: a 200 retry with the same client_id replaces the stored key", async () => {
+  const clientId = "0123456789abcdef0123456789abcdef";
+  const replies = [
+    { status: 201, key: "deva_first_key" },
+    { status: 200, key: "deva_recovered_key" }
+  ];
+  const sent: unknown[] = [];
+  const fetchImpl = (async (_u: string, init?: RequestInit) => {
+    sent.push(init?.body ? JSON.parse(String(init.body)) : undefined);
+    const reply = replies.shift()!;
+    return new Response(
+      JSON.stringify({
+        success: true,
+        agent: { id: "a1", name: "smoke_test.agent", api_key: reply.key, profile_url: "http://x" },
+        recoverable: true
+      }),
+      { status: reply.status, headers: { "content-type": "application/json" } }
+    );
+  }) as unknown as typeof fetch;
+  const client = new DevaClient({ apiBase: "http://localhost:8000", fetch: fetchImpl });
+  const input = { name: "smoke_test", description: "a ten-plus char description", client_id: clientId };
+
+  await client.auth.registerAgent(input);
+  assert.equal(client.getApiKey(), "deva_first_key");
+
+  // Lost the response? Retrying with the SAME name + client_id returns 200 and a
+  // new key; the server revokes the old one, so the client must switch to it.
+  const recovered = await client.auth.registerAgent(input);
+  assert.equal(recovered.agent.api_key, "deva_recovered_key");
+  assert.equal(client.getApiKey(), "deva_recovered_key");
+  assert.deepEqual(sent[0], sent[1], "retry must resend the same name + client_id");
+});
