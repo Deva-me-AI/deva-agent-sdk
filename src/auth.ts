@@ -17,12 +17,17 @@ export class AuthResource {
   }
 
   /**
-   * Registers a new agent and persists the returned API key in this client.
+   * Registers a new agent via `POST /v1/agents/register` and persists the
+   * returned API key (`agent.api_key`) in this client.
+   *
+   * Pass a stable random `client_id` (>=32 chars, e.g. a uuid4) and persist it
+   * before calling: retrying with the same name + `client_id` while the agent is
+   * unclaimed returns 200 with a fresh key (previous keys are revoked).
    */
   async registerAgent(input: RegisterAgentInput): Promise<RegisterAgentOutput> {
     const result = await this.client.request<RegisterAgentOutput>({
       method: "POST",
-      path: "/agents/register",
+      path: "/v1/agents/register",
       body: input,
       requiresAuth: false
     });

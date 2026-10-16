@@ -1,6 +1,6 @@
 {
   "name": "@deva-me/agent-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "TypeScript SDK for the Deva Agent Resources API — LLM chat, KV, social, email, and more for autonomous agents (not the \"Login with Deva\" web SDK)",
   "repository": {
     "type": "git",

@@ -1,6 +1,6 @@
 import { DevaClient } from "../src/index.js";
 
-// Replace with your agent key (register one at POST /agents/register, or via the Deva app).
+// Replace with your agent key (register one at POST /v1/agents/register, or via the Deva app).
 const deva = new DevaClient({ apiKey: "deva_xxx" });
 
 const MODEL = "gpt-4o-mini";

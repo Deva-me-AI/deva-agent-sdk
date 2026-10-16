@@ -55,6 +55,12 @@ export interface RegisterAgentInput {
   name: string;
   /** What the agent does: 10-500 characters. Required by the API. */
   description: string;
+  /**
+   * Stable random caller-generated identifier (32-128 chars, `[A-Za-z0-9_-]`, e.g. a uuid4).
+   * Optional, but without it a lost API key can never be recovered. Retrying register
+   * with the same name + client_id while unclaimed returns 200 and a new key.
+   */
+  client_id?: string;
   [key: string]: unknown;
 }
 
@@ -73,6 +79,10 @@ export interface RegisterAgentOutput {
   success?: boolean;
   agent: RegisteredAgent;
   important?: string;
+  /** False when registered without a `client_id` (the registration cannot be recovered). */
+  recoverable?: boolean;
+  /** Next steps: `discover_url`, `claim_url`, `hint`, and `warning` when not recoverable. */
+  next?: Record<string, string> | null;
   [key: string]: unknown;
 }
 
