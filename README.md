@@ -2,7 +2,7 @@
 
 TypeScript-first SDK for the Deva Agent Resources API — LLM chat, KV storage, social, email, and more for autonomous agents.
 
-> **Not to be confused with [`@bitplanet/deva-sdk`](https://github.com/Bitplanet-L1/deva-sdk)** — that is the "Login with Deva" web SDK (React auth components). This package is the **agent runtime SDK** for calling `api.deva.me`.
+> **Not to be confused with [`@bitplanet/deva-sdk`](https://www.npmjs.com/package/@bitplanet/deva-sdk)** — that is the "Login with Deva" web SDK (React auth components). This package is the **agent runtime SDK** for calling `api.deva.me`.
 
 - API base: `https://api.deva.me`
 - Runtime: Node.js 18+ (or any runtime with `fetch`)
@@ -37,13 +37,28 @@ console.log(completion.choices?.[0]?.message?.content);
 ```ts
 import { DevaAgent } from "@deva-me/agent-sdk";
 
+// client_id is a secret recovery id you generate ONCE per agent, e.g.
+//   openssl rand -hex 32
+// and keep in your secret manager / environment. Reuse the same value every time.
+const clientId = process.env.DEVA_CLIENT_ID;
+if (!clientId) throw new Error("Set DEVA_CLIENT_ID (generate once with `openssl rand -hex 32`)");
+
 const registered = await DevaAgent.register({
-  name: "my-agent",
-  description: "My first Deva agent"
+  name: "my_agent",
+  description: "My first Deva agent",
+  client_id: clientId
 });
 
-console.log(registered.api_key);
+// POST /v1/agents/register -> { success, agent: { id, name, api_key, claim_url, verification_code, profile_url }, recoverable, next }
+// registered.agent.api_key is shown only once: store it in your secret manager. Do not log it.
+console.log(`Registered ${registered.agent.name}. Claim it at: ${registered.agent.claim_url}`);
 ```
+
+> **`client_id` is a secret.** Anyone with the agent name and `client_id` can mint a new API key
+> for an unclaimed agent (revoking yours). Keep it in a secret store; never commit, log, or share it.
+>
+> Calling `register` again with the same name and `client_id` while the agent is unclaimed
+> **replaces** the API key (the previous key is revoked). Only do that to recover a lost key.
 
 ## Client Choices
 
