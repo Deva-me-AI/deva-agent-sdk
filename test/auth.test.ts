@@ -109,8 +109,8 @@ test("auth.registerAgent recovery: a 200 retry with the same client_id replaces 
   await client.auth.registerAgent(input);
   assert.equal(client.getApiKey(), "deva_first_key");
 
-  // Lost the response? Retrying with the SAME name + client_id returns 200 and a
-  // new key; the server revokes the old one, so the client must switch to it.
+  // Recovery: retrying with the SAME name + client_id returns 200 and a new key;
+  // the server revokes the old one, so the client must switch to it.
   // Without force, a client that already holds a key refuses (no request sent).
   await assert.rejects(() => client.auth.registerAgent(input), /already has an API key/);
   assert.equal(sent.length, 1);
