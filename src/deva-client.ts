@@ -9,6 +9,7 @@ import { KvResource } from "./resources/kv.js";
 import { MessagingResource } from "./resources/messaging.js";
 import { ModelsResource } from "./resources/models.js";
 import { ProfileResource } from "./resources/profile.js";
+import { ResourcesResource } from "./resources/resources.js";
 import { SearchResource } from "./resources/search.js";
 import { SocialResource } from "./resources/social.js";
 import { TranscriptionResource } from "./resources/transcription.js";
@@ -31,6 +32,7 @@ export class DevaClient {
   public readonly models: ModelsResource;
   public readonly discover: DiscoverResource;
   public readonly profile: ProfileResource;
+  public readonly resources: ResourcesResource;
   public readonly wallet: WalletResource;
   public readonly embeddings: EmbeddingsResource;
   public readonly transcription: TranscriptionResource;
@@ -50,6 +52,7 @@ export class DevaClient {
     this.models = new ModelsResource(this.http);
     this.discover = new DiscoverResource(this.http);
     this.profile = new ProfileResource(this.http);
+    this.resources = new ResourcesResource(this.http);
     this.wallet = new WalletResource(this.http);
     this.embeddings = new EmbeddingsResource(this.http);
     this.transcription = new TranscriptionResource(this.http);
