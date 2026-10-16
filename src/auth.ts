@@ -30,7 +30,15 @@ export class AuthResource {
    * revoke yours, so store it like the API key: never commit, log, or share it.
    * Generate it once per agent and reuse it on every retry.
    */
-  async registerAgent(input: RegisterAgentInput): Promise<RegisterAgentOutput> {
+  async registerAgent(input: RegisterAgentInput, options: { force?: boolean } = {}): Promise<RegisterAgentOutput> {
+    // Registering again with the same name + client_id replaces (and revokes) the key this
+    // client already holds. Refuse unless the caller explicitly asks for it.
+    if (this.client.getApiKey() && !options.force) {
+      throw new DevaError({
+        message:
+          "This client already has an API key. Registering again can revoke it; pass { force: true } to register anyway (e.g. to recover a lost key)."
+      });
+    }
     const result = await this.client.request<RegisterAgentOutput>({
       method: "POST",
       path: "/v1/agents/register",

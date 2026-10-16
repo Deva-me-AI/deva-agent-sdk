@@ -111,7 +111,10 @@ test("auth.registerAgent recovery: a 200 retry with the same client_id replaces 
 
   // Lost the response? Retrying with the SAME name + client_id returns 200 and a
   // new key; the server revokes the old one, so the client must switch to it.
-  const recovered = await client.auth.registerAgent(input);
+  // Without force, a client that already holds a key refuses (no request sent).
+  await assert.rejects(() => client.auth.registerAgent(input), /already has an API key/);
+  assert.equal(sent.length, 1);
+  const recovered = await client.auth.registerAgent(input, { force: true });
   assert.equal(recovered.agent.api_key, "deva_recovered_key");
   assert.equal(client.getApiKey(), "deva_recovered_key");
   assert.deepEqual(sent[0], sent[1], "retry must resend the same name + client_id");
