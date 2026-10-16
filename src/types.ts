@@ -56,7 +56,8 @@ export interface RegisterAgentInput {
   /** What the agent does: 10-500 characters. Required by the API. */
   description: string;
   /**
-   * Stable random caller-generated identifier (32-128 chars, `[A-Za-z0-9_-]`, e.g. a uuid4).
+   * Stable random caller-generated identifier (32-128 chars, `[A-Za-z0-9_-]`), e.g. from
+   * `openssl rand -hex 32`.
    * Optional, but without it a lost API key can never be recovered. Retrying register
    * with the same name + client_id while unclaimed returns 200 and a new key.
    *

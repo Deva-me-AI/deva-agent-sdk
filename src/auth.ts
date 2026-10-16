@@ -20,9 +20,10 @@ export class AuthResource {
    * Registers a new agent via `POST /v1/agents/register` and persists the
    * returned API key (`agent.api_key`) in this client.
    *
-   * Pass a stable random `client_id` (>=32 chars, e.g. a uuid4) and persist it
-   * before calling: retrying with the same name + `client_id` while the agent is
-   * unclaimed returns 200 with a fresh key (previous keys are revoked).
+   * Pass a stable random `client_id` (32-128 chars, e.g. `openssl rand -hex 32`)
+   * that you keep in a secret store: calling again with the same name +
+   * `client_id` while the agent is unclaimed returns 200 with a fresh key and
+   * revokes the previous one, so only do that to recover a lost key.
    *
    * Security: `client_id` is a secret recovery credential. Anyone who knows the
    * agent name + `client_id` can mint a new key for an unclaimed agent and
