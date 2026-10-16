@@ -36,15 +36,23 @@ console.log(completion.choices?.[0]?.message?.content);
 
 ```ts
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { linkSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { DevaAgent } from "@deva-me/agent-sdk";
 
 // Generate the client_id ONCE per agent and persist it BEFORE registering, then
 // reuse it on every retry: retrying with the same name + client_id while the
 // agent is unclaimed recovers a lost key. A new id each run defeats recovery.
 const CLIENT_ID_FILE = ".deva-client-id"; // keep out of git (add to .gitignore)
-if (!existsSync(CLIENT_ID_FILE)) {
-  writeFileSync(CLIENT_ID_FILE, randomUUID(), { mode: 0o600 });
+// Write a complete temp file, then hard-link it into place: link() fails if the file
+// already exists, so concurrent first runs never overwrite (or half-read) the id.
+const tmp = `${CLIENT_ID_FILE}.${process.pid}.tmp`;
+writeFileSync(tmp, randomUUID(), { mode: 0o600 });
+try {
+  linkSync(tmp, CLIENT_ID_FILE);
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+} finally {
+  unlinkSync(tmp);
 }
 const clientId = readFileSync(CLIENT_ID_FILE, "utf8").trim();
 
