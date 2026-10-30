@@ -43,7 +43,7 @@ for (const failure of [429, 500, 502, 503, 504, 402, "network", "abort"]) {
     const m = mock(() => {
       if (failure === "network") throw new TypeError("lost connection");
       if (failure === "abort") throw new DOMException("timeout", "AbortError");
-      return Response.json({ error: "failure" }, { status: failure });
+      return Response.json({ error: "failure" }, { status: failure, headers: failure === 402 ? { "x-payment-amount": "1", "x-payment-pay-to": "test-payee" } : {} });
     });
     const client = new DevaClient({ apiKey: "test", fetch: m.fetch, x402: { payer: async () => { payments++; return { paid: true }; } } });
     await assert.rejects(client.tools.run("tool"));
@@ -131,3 +131,20 @@ test("live tool rail smoke (free reads only)", { skip: !process.env.DEVA_API_KEY
   await tools.run("tool"); await tools.run("tool");
   assert.equal(tools.usage.spentUsd, 0.4);
  });
+
+test("estimate errors leave budget untouched and caller mutations cannot change a priced request", async () => {
+  let fail = true;
+  const m = mock((url, init) => {
+    if (url.pathname.includes("/estimate/")) return fail ? Response.json({}, { status: 400 }) : estimate(0.1);
+    assert.deepEqual(JSON.parse(init.body as string).params, { query: "original" });
+    return done(0.1);
+  });
+  const tools = m.agent.tools.withBudget({ maxUsd: 1, maxRuns: 1 });
+  await assert.rejects(tools.run("tool"));
+  assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0, runs: 0 });
+  fail = false;
+  const input = { params: { query: "original" } };
+  const result = tools.run("tool", input);
+  input.params.query = "changed";
+  await result;
+});
