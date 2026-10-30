@@ -102,7 +102,9 @@ export interface ToolBudget { maxUsd: number; maxRuns: number }
 export interface ToolBudgetUsage { spentUsd: number; reservedUsd: number; runs: number }
 
 const ROOT = "/v1/agents/resources";
-const terminal = (status: string): boolean => ["succeeded", "failed", "settled"].includes(status.toLowerCase());
+const terminal = (status: unknown): boolean => typeof status === "string" && ["succeeded", "failed", "settled"].includes(status.toLowerCase());
+const retryableStatusRead = (error: unknown): boolean => error instanceof DevaError &&
+  (error.status === undefined ? error.code === undefined : [429, 500, 502, 503, 504].includes(error.status));
 const validMoney = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 
 // Convert finite nonnegative JSON numbers to decimal arithmetic, including exponent notation.
@@ -143,14 +145,17 @@ export class ToolsResource {
       const remaining = deadline - Date.now();
       if (remaining <= 0) throw new ToolRunTimeoutError(runId, timeoutMs);
       let timer: ReturnType<typeof setTimeout> | undefined;
-      let result: ToolRunStatusResponse;
       try {
-        result = await Promise.race([
+        const result = await Promise.race([
           this.getRun(runId, { timeoutMs: remaining }),
           new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new ToolRunTimeoutError(runId, timeoutMs)), remaining); })
         ]);
+        if (terminal(result.status)) return result;
+      } catch (error) {
+        // Retry safe reads in this loop, with a fresh remaining timeout each time.
+        // Transport retries here must not outlive the overall polling deadline.
+        if (!retryableStatusRead(error)) throw error;
       } finally { clearTimeout(timer); }
-      if (terminal(result.status)) return result;
       await new Promise(resolve => setTimeout(resolve, Math.min(pollMs, Math.max(0, deadline - Date.now()))));
     }
   }

@@ -252,3 +252,77 @@ test("waitForRun rejects timeouts above the timer limit before fetching", async 
   assert.equal(m.calls.length, 0);
   assert.equal((await m.agent.tools.waitForRun("r1", { timeoutMs: 2_147_483_647 })).status, "succeeded");
 });
+
+for (const status of [undefined, null, 42, {}, []]) {
+  test(`paid result with ${JSON.stringify(status)} status survives and settles after a valid status`, async () => {
+    const result = JSON.parse(JSON.stringify({ ...done(), status, output: { value: "paid result" } }));
+    let validStatus = false;
+    const m = mock(url => url.pathname.includes("/estimate/") ? estimate()
+      : url.pathname.includes("/runs/") && validStatus ? done() : result);
+    const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+    assert.deepEqual(await tools.run("tool"), result);
+    assert.deepEqual(await tools.getRun("r1"), result);
+    assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.4, runs: 1 });
+    const waiting = tools.waitForRun("r1", { timeoutMs: 200, pollMs: 1 });
+    setTimeout(() => { validStatus = true; }, 10);
+    assert.equal((await waiting).status, "succeeded");
+    await tools.getRun("r1");
+    assert.deepEqual(tools.usage, { spentUsd: 0.2, reservedUsd: 0, runs: 1 });
+    assert.equal(m.calls.filter(c => c.url.pathname.includes("/run/")).length, 1);
+  });
+}
+
+test("non-JSON paid response preserves raw output and its reservation", async () => {
+  const m = mock(url => url.pathname.includes("/estimate/") ? estimate() : new Response("paid output"));
+  const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+  assert.deepEqual(await tools.run("tool"), { raw: "paid output" });
+  assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.4, runs: 1 });
+});
+
+for (const failure of [429, 500, 502, 503, 504, "network", "abort"]) {
+  test(`waitForRun retries transient ${failure} status reads and settles within the deadline`, async () => {
+    let reads = 0;
+    const m = mock(url => {
+      if (url.pathname.includes("/estimate/")) return estimate();
+      if (url.pathname.includes("/run/")) return { status: "running", run_id: "r1" };
+      if (++reads === 1) {
+        if (failure === "network") throw new TypeError("connection lost");
+        if (failure === "abort") throw new DOMException("aborted", "AbortError");
+        return Response.json({}, { status: failure });
+      }
+      return done();
+    });
+    const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+    await tools.run("tool");
+    assert.equal((await tools.waitForRun("r1", { timeoutMs: 200, pollMs: 1 })).status, "succeeded");
+    assert.equal(reads, 2);
+    assert.deepEqual(tools.usage, { spentUsd: 0.2, reservedUsd: 0, runs: 1 });
+    assert.equal(m.calls.filter(c => c.url.pathname.includes("/run/")).length, 1);
+  });
+}
+
+test("waitForRun repeated transient errors expire without background retries", async () => {
+  const m = mock(() => Response.json({}, { status: 503 }));
+  const start = Date.now();
+  await assert.rejects(m.agent.tools.waitForRun("r1", { timeoutMs: 30, pollMs: 1 }), ToolRunTimeoutError);
+  assert.ok(Date.now() - start < 500);
+  assert.ok(m.calls.length > 1);
+  const callsAtTimeout = m.calls.length;
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(m.calls.length, callsAtTimeout);
+});
+
+for (const status of [400, 401, 402, 403, 404]) {
+  test(`waitForRun does not retry permanent ${status} errors`, async () => {
+    const m = mock(() => Response.json({}, { status }));
+    await assert.rejects(m.agent.tools.waitForRun("r1", { timeoutMs: 200, pollMs: 1 }), error => error.status === status);
+    assert.equal(m.calls.length, 1);
+  });
+}
+
+test("waitForRun does not retry missing credentials", async () => {
+  const m = mock(() => done());
+  const client = new DevaClient({ fetch: m.fetch });
+  await assert.rejects(client.tools.waitForRun("r1", { timeoutMs: 200, pollMs: 1 }), /No API key configured/);
+  assert.equal(m.calls.length, 0);
+});
