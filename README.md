@@ -341,7 +341,9 @@ console.log(result, tools.usage);
   network failures, timeouts, rate limits and payment challenges.
 - `getRun(runId)` retrieves status. `waitForRun` polls through running/settling
   until succeeded/failed/settled, and returns failures as data. Its default timeout
-  is 120 seconds and poll interval is 1 second. `ToolRunTimeoutError` does not
+  is 120 seconds and poll interval is 1 second. Timeouts must be between 0 and
+  2,147,483,647 milliseconds; larger values throw `RangeError` before polling.
+  `ToolRunTimeoutError` does not
   cancel the remote run; resume polling with the same run ID.
 
 Each `withBudget({ maxUsd, maxRuns })` creates an independent in-memory scope.
@@ -351,7 +353,8 @@ checks the count and available USD, and throws exported `BudgetExceededError`
 with `reason`, `budget`, `usage` and (when available) `estimatedUsd` on refusal.
 Unknown prices are refused; variable prices require a known cap from estimate.
 
-Pending runs reserve their estimates, including concurrent starts. Use the same
+Pending runs reserve their estimates, including concurrent starts and nonterminal
+responses with provisional costs. Use the same
 scope's `getRun` or `waitForRun` to replace a reservation with `actual_cost_usd`
 exactly once, including charged failures. `tools.usage` exposes `spentUsd`,
 `reservedUsd` and attempted `runs`. Ambiguous failed POSTs keep their reservation

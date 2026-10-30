@@ -135,8 +135,8 @@ export class ToolsResource {
   }
   /** Poll until terminal; timeout does not cancel the remote run. */
   async waitForRun(runId: string, { timeoutMs = 120_000, pollMs = 1_000 }: ToolWaitOptions = {}): Promise<ToolRunStatusResponse> {
-    if (!Number.isFinite(timeoutMs) || timeoutMs < 0 || !Number.isFinite(pollMs) || pollMs <= 0) {
-      throw new RangeError("timeoutMs must be nonnegative and pollMs must be positive and finite.");
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 0 || timeoutMs > 2_147_483_647 || !Number.isFinite(pollMs) || pollMs <= 0) {
+      throw new RangeError("timeoutMs must be finite and between 0 and 2147483647 milliseconds; pollMs must be positive and finite.");
     }
     const deadline = Date.now() + timeoutMs;
     while (true) {
@@ -220,7 +220,7 @@ export class BudgetedToolsResource extends ToolsResource {
       }
       throw error;
     }
-    if ("actual_cost_usd" in result && validMoney(result.actual_cost_usd)) {
+    if (terminal(result.status) && "actual_cost_usd" in result && validMoney(result.actual_cost_usd)) {
       this.settle(token, result.actual_cost_usd);
     } else if (result.run_id) {
       // Preserve successful output even when billing is not yet known.

@@ -222,3 +222,33 @@ test("missing API key leaves budget available before dispatch", async () => {
   await tools.run("tool");
   assert.deepEqual(tools.usage, { spentUsd: 0.2, reservedUsd: 0, runs: 1 });
 });
+
+for (const status of ["running", "settling"]) {
+  test(`${status} start with provisional cost retains reservation until terminal settlement`, async () => {
+    let polledStatus = status;
+    const m = mock(url => url.pathname.includes("/estimate/") ? estimate(0.6)
+      : url.pathname.includes("/runs/") ? { ...done(0.5), status: polledStatus }
+      : { ...done(0), status });
+    const tools = m.agent.tools.withBudget({ maxUsd: 1, maxRuns: 10 });
+    await tools.run("tool");
+    assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.6, runs: 1 });
+    await assert.rejects(tools.run("tool"), error => error instanceof BudgetExceededError && error.reason === "maxUsd");
+    assert.equal(m.calls.filter(c => c.url.pathname.includes("/run/")).length, 1);
+    await tools.getRun("r1");
+    assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.6, runs: 1 });
+    polledStatus = "succeeded";
+    await tools.getRun("r1");
+    await tools.getRun("r1");
+    assert.deepEqual(tools.usage, { spentUsd: 0.5, reservedUsd: 0, runs: 1 });
+    await assert.rejects(tools.run("tool"), error => error instanceof BudgetExceededError && error.reason === "maxUsd");
+  });
+}
+
+test("waitForRun rejects timeouts above the timer limit before fetching", async () => {
+  const m = mock(() => done());
+  for (const timeoutMs of [2_147_483_648, 2_592_000_000, Number.MAX_VALUE]) {
+    await assert.rejects(m.agent.tools.waitForRun("r1", { timeoutMs }), RangeError);
+  }
+  assert.equal(m.calls.length, 0);
+  assert.equal((await m.agent.tools.waitForRun("r1", { timeoutMs: 2_147_483_647 })).status, "succeeded");
+});
