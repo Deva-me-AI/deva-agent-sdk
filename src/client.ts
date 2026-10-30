@@ -275,7 +275,7 @@ export class DevaHttpClient {
 
         if (options.requiresAuth !== false) {
           if (!this.apiKey) {
-            throw new DevaError({ message: "No API key configured. Pass apiKey when creating DevaClient." });
+            throw new DevaError({ code: "client_missing_api_key", message: "No API key configured. Pass apiKey when creating DevaClient." });
           }
           headers.authorization = `Bearer ${this.apiKey}`;
         }
@@ -337,7 +337,7 @@ export class DevaHttpClient {
         const normalized = normalizeErrorEnvelope(response.status, payload);
         normalized.paymentChallenge = challenge;
 
-        if (RETRYABLE.has(response.status) && attempt < 3) {
+        if (RETRYABLE.has(response.status) && options.retry !== false && attempt < 3) {
           await sleep(waitMs);
           attempt += 1;
           waitMs *= 2;
@@ -352,7 +352,7 @@ export class DevaHttpClient {
       } catch (error) {
         const isAbort = error instanceof Error && error.name === "AbortError";
 
-        if (isAbort && attempt < 3) {
+        if (isAbort && options.retry !== false && attempt < 3) {
           await sleep(waitMs);
           attempt += 1;
           waitMs *= 2;
@@ -363,7 +363,7 @@ export class DevaHttpClient {
           throw error;
         }
 
-        if (attempt < 3) {
+        if (options.retry !== false && attempt < 3) {
           await sleep(waitMs);
           attempt += 1;
           waitMs *= 2;
@@ -383,7 +383,7 @@ export class DevaHttpClient {
 
     if (!headers.has("authorization")) {
       if (!this.apiKey) {
-        throw new DevaError({ message: "No API key configured. Pass apiKey when creating DevaClient." });
+        throw new DevaError({ code: "client_missing_api_key", message: "No API key configured. Pass apiKey when creating DevaClient." });
       }
       headers.set("authorization", `Bearer ${this.apiKey}`);
     }

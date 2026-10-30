@@ -1,6 +1,6 @@
 {
   "name": "@deva-me/agent-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "TypeScript SDK for the Deva Agent Resources API \u2014 LLM chat, KV, social, email, and more for autonomous agents (not the \"Login with Deva\" web SDK)",
   "repository": {
     "type": "git",
@@ -35,7 +35,9 @@
     "build:cjs": "tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({ type: 'commonjs' }))\"",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "npm run build && node --experimental-strip-types --test 'test/*.test.ts'"
+    "test": "npm run build && node --experimental-strip-types --test 'test/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.esm.json --noEmit && tsc -p tsconfig.cjs.json --noEmit",
+    "lint": "tsc -p tsconfig.esm.json --noEmit --noUnusedLocals --noUnusedParameters --noFallthroughCasesInSwitch"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

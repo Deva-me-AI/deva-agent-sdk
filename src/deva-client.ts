@@ -1,3 +1,4 @@
+import { ToolsResource } from "./resources/tools.js";
 import { AuthResource } from "./auth.js";
 import { DevaHttpClient } from "./client.js";
 import { ChatResource } from "./resources/chat.js";
@@ -20,6 +21,7 @@ import type { DevaClientOptions } from "./types.js";
 export class DevaClient {
   private readonly http: DevaHttpClient;
 
+  public readonly tools: ToolsResource;
   public readonly auth: AuthResource;
   public readonly chat: ChatResource;
   public readonly social: SocialResource;
@@ -39,6 +41,7 @@ export class DevaClient {
   constructor(options: DevaClientOptions = {}) {
     this.http = new DevaHttpClient(options);
 
+    this.tools = new ToolsResource(this.http);
     this.auth = new AuthResource(this.http);
     this.chat = new ChatResource(this.http);
     this.social = new SocialResource(this.http);

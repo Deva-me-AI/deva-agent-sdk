@@ -12,6 +12,7 @@ export interface DevaAgentOptions extends Omit<DevaClientOptions, "apiBase"> {
 export class DevaAgent {
   public readonly client: DevaClient;
 
+  public readonly tools: DevaClient["tools"];
   public readonly chat: DevaClient["chat"];
   public readonly social: DevaClient["social"];
   public readonly search: DevaClient["search"];
@@ -36,6 +37,7 @@ export class DevaAgent {
       apiBase: options.baseUrl ?? "https://api.deva.me"
     });
 
+    this.tools = this.client.tools;
     this.chat = this.client.chat;
     this.social = this.client.social;
     this.search = this.client.search;
