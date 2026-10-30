@@ -71,7 +71,7 @@ export interface ToolRunResponse {
   status: string;
   charged: boolean;
   credits_charged: number;
-  actual_cost_usd: number;
+  actual_cost_usd: number | null;
   run_id: string | null;
   output: JsonObject | null;
   message: string | null;
@@ -118,20 +118,20 @@ export class ToolsResource {
   constructor(protected readonly client: DevaHttpClient) {}
 
   discover(input: ToolsDiscoverRequest = {}): Promise<ToolsDiscoverResponse> {
-    return this.client.request({ method: "GET", path: `${ROOT}/discover`, query: { ...input }, requiresAuth: false });
+    return this.client.request({ method: "GET", path: `${ROOT}/discover`, query: { ...input }, requiresAuth: false, retryOn402: false });
   }
   inspect(slug: string): Promise<ToolSpec> {
-    return this.client.request({ method: "GET", path: `${ROOT}/inspect/${encodeURIComponent(slug)}`, requiresAuth: false });
+    return this.client.request({ method: "GET", path: `${ROOT}/inspect/${encodeURIComponent(slug)}`, requiresAuth: false, retryOn402: false });
   }
   estimate(slug: string, input: ToolRunInput = {}): Promise<ToolCostEstimate> {
-    return this.client.request({ method: "POST", path: `${ROOT}/estimate/${encodeURIComponent(slug)}`, body: input, requiresAuth: false });
+    return this.client.request({ method: "POST", path: `${ROOT}/estimate/${encodeURIComponent(slug)}`, body: input, requiresAuth: false, retryOn402: false });
   }
   /** Starts one run. Paid POSTs are never automatically retried, including on 402. */
   run(slug: string, input: ToolRunInput = {}): Promise<ToolRunResponse | ToolRunStartResponse> {
     return this.client.request({ method: "POST", path: `${ROOT}/run/${encodeURIComponent(slug)}`, body: input, retry: false, retryOn402: false });
   }
   async getRun(runId: string, options: { timeoutMs?: number } = {}): Promise<ToolRunStatusResponse> {
-    return this.client.request({ method: "GET", path: `${ROOT}/runs/${encodeURIComponent(runId)}`, timeoutMs: options.timeoutMs, retry: options.timeoutMs === undefined });
+    return this.client.request({ method: "GET", path: `${ROOT}/runs/${encodeURIComponent(runId)}`, timeoutMs: options.timeoutMs, retry: options.timeoutMs === undefined, retryOn402: false });
   }
   /** Poll until terminal; timeout does not cancel the remote run. */
   async waitForRun(runId: string, { timeoutMs = 120_000, pollMs = 1_000 }: ToolWaitOptions = {}): Promise<ToolRunStatusResponse> {
@@ -207,11 +207,23 @@ export class BudgetedToolsResource extends ToolsResource {
       this.reservations.set(token, reserve);
       this.runs += 1;
     } finally { release(); }
-    // On ambiguous transport errors, retain both reservation and attempted-run count.
-    const result = await super.run(slug, snapshot);
-    if ("actual_cost_usd" in result) {
+    let result: ToolRunResponse | ToolRunStartResponse;
+    try {
+      result = await super.run(slug, snapshot);
+    } catch (error) {
+      // A request timeout remains ambiguous; other 4xx responses reject execution.
+      // Transport errors, aborts and server failures retain the reservation.
+      if (error instanceof DevaError && ((error.status === undefined && error.code === "client_missing_api_key") ||
+          (error.status !== undefined && error.status >= 400 && error.status < 500 && error.status !== 408))) {
+        this.reservations.delete(token);
+        this.runs -= 1;
+      }
+      throw error;
+    }
+    if ("actual_cost_usd" in result && validMoney(result.actual_cost_usd)) {
       this.settle(token, result.actual_cost_usd);
-    } else {
+    } else if (result.run_id) {
+      // Preserve successful output even when billing is not yet known.
       this.pending.set(result.run_id, token);
     }
     return result;

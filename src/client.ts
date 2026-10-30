@@ -275,7 +275,7 @@ export class DevaHttpClient {
 
         if (options.requiresAuth !== false) {
           if (!this.apiKey) {
-            throw new DevaError({ message: "No API key configured. Pass apiKey when creating DevaClient." });
+            throw new DevaError({ code: "client_missing_api_key", message: "No API key configured. Pass apiKey when creating DevaClient." });
           }
           headers.authorization = `Bearer ${this.apiKey}`;
         }
@@ -383,7 +383,7 @@ export class DevaHttpClient {
 
     if (!headers.has("authorization")) {
       if (!this.apiKey) {
-        throw new DevaError({ message: "No API key configured. Pass apiKey when creating DevaClient." });
+        throw new DevaError({ code: "client_missing_api_key", message: "No API key configured. Pass apiKey when creating DevaClient." });
       }
       headers.set("authorization", `Bearer ${this.apiKey}`);
     }

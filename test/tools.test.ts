@@ -148,3 +148,77 @@ test("estimate errors leave budget untouched and caller mutations cannot change 
   input.params.query = "changed";
   await result;
 });
+
+for (const status of [400, 401, 402, 403, 404, 409, 422, 429]) {
+  test(`definitive ${status} rejection releases budget and run count`, async () => {
+    let reject = true;
+    const m = mock(url => url.pathname.includes("/estimate/") ? estimate() : reject ? Response.json({}, { status }) : done());
+    const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+    await assert.rejects(tools.run("tool"), error => error.status === status);
+    assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0, runs: 0 });
+    reject = false;
+    await tools.run("tool");
+    assert.deepEqual(tools.usage, { spentUsd: 0.2, reservedUsd: 0, runs: 1 });
+  });
+}
+
+for (const failure of [408, 500, 502, "network", "abort"]) {
+  test(`ambiguous ${failure} failure keeps budget reserved`, async () => {
+    const m = mock(url => {
+      if (url.pathname.includes("/estimate/")) return estimate();
+      if (failure === "network") throw new TypeError("connection lost");
+      if (failure === "abort") throw new DOMException("aborted", "AbortError");
+      return Response.json({}, { status: failure });
+    });
+    const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+    await assert.rejects(tools.run("tool"));
+    assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.4, runs: 1 });
+  });
+}
+
+for (const cost of [null, undefined, -1, "0.2"]) {
+  test(`sync result with ${String(cost)} cost is returned and can settle later`, async () => {
+    const result = { ...done(), actual_cost_usd: cost, output: { value: "paid result" } };
+    const m = mock(url => url.pathname.includes("/estimate/") ? estimate() : url.pathname.includes("/runs/") ? done() : result);
+    const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+    assert.deepEqual(await tools.run("tool"), JSON.parse(JSON.stringify(result)));
+    assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.4, runs: 1 });
+    await tools.getRun("r1");
+    await tools.getRun("r1");
+    assert.deepEqual(tools.usage, { spentUsd: 0.2, reservedUsd: 0, runs: 1 });
+  });
+}
+
+test("sync result without cost or run ID retains reservation and output", async () => {
+  const result = { ...done(), actual_cost_usd: null, run_id: null, output: { value: "paid result" } };
+  const m = mock(url => url.pathname.includes("/estimate/") ? estimate() : result);
+  const tools = m.agent.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+  assert.deepEqual(await tools.run("tool"), result);
+  assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0.4, runs: 1 });
+});
+
+for (const endpoint of ["discover", "inspect", "estimate", "getRun", "budgeted estimate"]) {
+  test(`${endpoint} payment challenge never invokes payer`, async () => {
+    let payments = 0;
+    const m = mock(() => Response.json({}, { status: 402, headers: { "x-payment-amount": "1", "x-payment-pay-to": "test-payee" } }));
+    const client = new DevaClient({ apiKey: "test", fetch: m.fetch, x402: { payer: async () => { payments++; return { paid: true }; } } });
+    const call = endpoint === "budgeted estimate"
+      ? client.tools.withBudget({ maxUsd: 0, maxRuns: 0 }).run("tool")
+      : endpoint === "discover" ? client.tools.discover() : client.tools[endpoint]("tool");
+    await assert.rejects(call, error => error.status === 402);
+    assert.equal(payments, 0);
+    assert.equal(m.calls.length, 1);
+  });
+}
+
+test("missing API key leaves budget available before dispatch", async () => {
+  const m = mock(url => url.pathname.includes("/estimate/") ? estimate() : done());
+  const client = new DevaClient({ fetch: m.fetch });
+  const tools = client.tools.withBudget({ maxUsd: 0.4, maxRuns: 1 });
+  await assert.rejects(tools.run("tool"), /No API key configured/);
+  assert.deepEqual(tools.usage, { spentUsd: 0, reservedUsd: 0, runs: 0 });
+  assert.equal(m.calls.filter(c => c.url.pathname.includes("/run/")).length, 0);
+  client.setApiKey("test");
+  await tools.run("tool");
+  assert.deepEqual(tools.usage, { spentUsd: 0.2, reservedUsd: 0, runs: 1 });
+});

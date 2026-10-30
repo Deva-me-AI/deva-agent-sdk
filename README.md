@@ -335,6 +335,7 @@ console.log(result, tools.usage);
 
 - `discover({ q, category, provider, status, cursor, limit, min_score })`,
   `inspect(slug)` and `estimate(slug, { params, maxTotalChargeUsd })` are free.
+  Tool discovery, inspection, estimation and status reads never invoke the x402 payer.
 - `run(slug, input)` returns a synchronous `ToolRunResponse` or asynchronous
   `ToolRunStartResponse`. Paid POSTs are never automatically retried, including
   network failures, timeouts, rate limits and payment challenges.
@@ -354,8 +355,10 @@ Pending runs reserve their estimates, including concurrent starts. Use the same
 scope's `getRun` or `waitForRun` to replace a reservation with `actual_cost_usd`
 exactly once, including charged failures. `tools.usage` exposes `spentUsd`,
 `reservedUsd` and attempted `runs`. Ambiguous failed POSTs keep their reservation
-and run count because the server may already have started work. Terminal results
-without a known cost also retain their reservation.
+and run count because the server may already have started work. Definitive 4xx
+rejections (excluding ambiguous 408 timeouts) and missing local credentials release
+both. Terminal results without a valid cost are returned with their reservation
+retained; when a run ID is available, later status reads can settle them.
 
 This is an estimate-based client safety net, not a server-enforced spending
 ceiling: actual costs can exceed estimates. It accounts for the API's USD fields,
