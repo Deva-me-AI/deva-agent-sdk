@@ -12,3 +12,4 @@ export * from "./social.js";
 export * from "./transcription.js";
 export * from "./vision.js";
 export * from "./wallet.js";
+export * from "./tools.js";

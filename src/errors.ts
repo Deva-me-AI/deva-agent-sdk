@@ -179,3 +179,24 @@ export function normalizeError(error: unknown): DevaError {
   if (error instanceof Error) return new DevaError({ message: error.message });
   return new DevaError({ message: "Unknown error" });
 }
+
+/** A task-scoped tool budget refused a run before its paid POST. */
+export class BudgetExceededError extends DevaError {
+  constructor(
+    public readonly reason: "maxUsd" | "maxRuns" | "unknownEstimate",
+    public readonly budget: { maxUsd: number; maxRuns: number },
+    public readonly usage: { spentUsd: number; reservedUsd: number; runs: number },
+    public readonly estimatedUsd?: number
+  ) {
+    super({ code: "BUDGET_EXCEEDED", message: `Tool budget refused run: ${reason}` });
+    this.name = "BudgetExceededError";
+  }
+}
+
+/** Waiting timed out; the remote run may still be executing. */
+export class ToolRunTimeoutError extends DevaError {
+  constructor(public readonly runId: string, public readonly timeoutMs: number) {
+    super({ code: "TOOL_RUN_TIMEOUT", message: `Timed out waiting for tool run ${runId} after ${timeoutMs}ms` });
+    this.name = "ToolRunTimeoutError";
+  }
+}

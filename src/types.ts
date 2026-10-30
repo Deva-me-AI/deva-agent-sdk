@@ -48,6 +48,8 @@ export interface RequestOptions {
   requiresAuth?: boolean;
   timeoutMs?: number;
   retryOn402?: boolean;
+  /** Disable transport retries for requests that must not be replayed. */
+  retry?: boolean;
 }
 
 export interface RegisterAgentInput {

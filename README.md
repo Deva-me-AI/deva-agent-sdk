@@ -311,3 +311,61 @@ Build targets:
 - `dist/esm`
 - `dist/cjs`
 - `dist/types`
+
+## Tool discovery and execution
+
+`agent.tools` exposes the provider-independent tool rail. The existing
+`agent.discover` resource continues to discover **agents**.
+
+```ts
+const tools = agent.tools.withBudget({ maxUsd: 2, maxRuns: 3 });
+const page = await tools.discover({ q: "web search", limit: 5 });
+const spec = await tools.inspect(page.items[0].slug);
+// Supply parameters that satisfy spec.input_schema.
+const input = { params: spec.defaults, maxTotalChargeUsd: 1 };
+const estimate = await tools.estimate(spec.slug, input);
+console.log(estimate);
+// This call spends money. Review the schema, parameters and estimate first.
+const started = await tools.run(spec.slug, input);
+const result = "poll" in started
+  ? await tools.waitForRun(started.run_id, { timeoutMs: 120_000, pollMs: 1_000 })
+  : started;
+console.log(result, tools.usage);
+```
+
+- `discover({ q, category, provider, status, cursor, limit, min_score })`,
+  `inspect(slug)` and `estimate(slug, { params, maxTotalChargeUsd })` are free.
+- `run(slug, input)` returns a synchronous `ToolRunResponse` or asynchronous
+  `ToolRunStartResponse`. Paid POSTs are never automatically retried, including
+  network failures, timeouts, rate limits and payment challenges.
+- `getRun(runId)` retrieves status. `waitForRun` polls through running/settling
+  until succeeded/failed/settled, and returns failures as data. Its default timeout
+  is 120 seconds and poll interval is 1 second. `ToolRunTimeoutError` does not
+  cancel the remote run; resume polling with the same run ID.
+
+Each `withBudget({ maxUsd, maxRuns })` creates an independent in-memory scope.
+Both limits are required, finite and nonnegative; `maxRuns` is an integer and
+zero permits no runs. Before every paid POST the scope estimates the request,
+checks the count and available USD, and throws exported `BudgetExceededError`
+with `reason`, `budget`, `usage` and (when available) `estimatedUsd` on refusal.
+Unknown prices are refused; variable prices require a known cap from estimate.
+
+Pending runs reserve their estimates, including concurrent starts. Use the same
+scope's `getRun` or `waitForRun` to replace a reservation with `actual_cost_usd`
+exactly once, including charged failures. `tools.usage` exposes `spentUsd`,
+`reservedUsd` and attempted `runs`. Ambiguous failed POSTs keep their reservation
+and run count because the server may already have started work. Terminal results
+without a known cost also retain their reservation.
+
+This is an estimate-based client safety net, not a server-enforced spending
+ceiling: actual costs can exceed estimates. It accounts for the API's USD fields,
+not credits, and cannot cover other scopes, processes or direct API calls. Use
+`maxTotalChargeUsd` and server-side account limits for additional controls.
+
+The guard's count-at-call and cost-at-completion design is inspired by
+[activegraph-monid's budget guard](https://github.com/monid-ai/activegraph-monid/blob/main/src/research_agent/behaviors/budget_guard.py),
+with an independent TypeScript implementation and concurrent reservations.
+
+See [examples/tools-loop.ts](examples/tools-loop.ts). `npm test` includes mocked
+HTTP coverage and a free live discover/inspect/estimate smoke test, skipped unless
+`DEVA_API_KEY` is set. The smoke test never starts a paid run.
