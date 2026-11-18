@@ -59,7 +59,7 @@ function toBlob(file: Blob | ArrayBuffer | Uint8Array, contentType?: string): Bl
   return new Blob([copy], { type: contentType });
 }
 
-/** File upload/download/list/delete and presigned URL workflows. */
+/** File upload/download/list/delete operations. */
 export class FilesResource {
   constructor(private readonly client: DevaHttpClient) {}
 
@@ -127,14 +127,8 @@ export class FilesResource {
     });
   }
 
-  /**
-   * Creates a presigned upload/download URL. Expected endpoint: `POST /v1/agents/files/presign`.
-   */
-  presign(payload: PresignFileRequest): Promise<PresignFileResponse> {
-    return this.client.request<PresignFileResponse>({
-      method: "POST",
-      path: "/v1/agents/files/presign",
-      body: payload
-    });
+  /** @deprecated Not supported by the live API. Use upload() or download(). */
+  presign(_payload: PresignFileRequest): Promise<PresignFileResponse> {
+    return Promise.reject(new DevaError({ code: "unsupported_operation", message: "Presigned file URLs are not supported by the live API; use upload() or download()." }));
   }
 }

@@ -5,14 +5,14 @@ export interface TranscriptionRequest {
   file: Blob | ArrayBuffer | Uint8Array;
   filename?: string;
   language?: string;
-  model?: string;
-  prompt?: string;
 }
 
 export interface TranscriptionResponse {
   text?: string;
   language?: string;
-  duration?: number;
+  duration_seconds?: number;
+  credits_cost?: number;
+  provider?: string;
   [key: string]: unknown;
 }
 
@@ -30,17 +30,15 @@ export class TranscriptionResource {
   constructor(private readonly client: DevaHttpClient) {}
 
   /**
-   * Transcribes audio via `POST /v1/ai/audio/transcriptions`.
+   * Transcribes audio via `POST /v1/ai/transcribe`.
    */
   async create(payload: TranscriptionRequest): Promise<TranscriptionResponse> {
     const form = new FormData();
     form.set("file", toBlob(payload.file), payload.filename ?? "audio.wav");
 
     if (payload.language) form.set("language", payload.language);
-    if (payload.model) form.set("model", payload.model);
-    if (payload.prompt) form.set("prompt", payload.prompt);
 
-    const response = await this.client.rawFetch("/v1/ai/audio/transcriptions", {
+    const response = await this.client.rawFetch("/v1/ai/transcribe", {
       method: "POST",
       body: form
     });

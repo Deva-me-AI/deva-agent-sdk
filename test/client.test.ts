@@ -181,6 +181,7 @@ function walletPolicy(overrides: Partial<NonNullable<ConstructorParameters<typeo
   return {
     enabled: true,
     walletAutoPay: true,
+    walletPayPath: "/v1/agents/wallet/pay",
     autoPayPolicy: {
       maxAmount: "1000",
       maxCumulativeAmount: "2000",

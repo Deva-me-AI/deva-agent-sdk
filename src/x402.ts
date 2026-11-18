@@ -371,8 +371,11 @@ export function createWalletX402Payer(
   fetchImpl: typeof fetch,
   apiBase: string,
   apiKeyGetter: () => string | undefined,
-  payPath = "/v1/agents/wallet/pay"
+  payPath?: string
 ): X402Payer {
+  if (!payPath) {
+    throw new DevaError({ code: "unsupported_operation", message: "The live API has no wallet pay route. Set walletPayPath to your custom payment endpoint or supply x402.payer." });
+  }
   return async (challenge: X402Challenge, context: X402PaymentContext): Promise<X402PaymentResult> => {
     const apiKey = apiKeyGetter();
     if (!apiKey) {

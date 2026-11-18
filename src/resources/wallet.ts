@@ -1,10 +1,16 @@
 import { DevaHttpClient } from "../client.js";
+import { DevaError } from "../errors.js";
 import type { PaginatedRequest, PaginatedResponse } from "../types.js";
 
 export interface WalletBalance {
-  karma?: number;
-  available?: number;
-  pending?: number;
+  success: boolean;
+  unit: "credits" | "usd" | "karma";
+  subject: { type: string; agent_id?: string | null; user_id?: string | null; owner_user_id?: string | null };
+  agent_balance: Record<"bronze" | "silver" | "gold" | "purchased_silver" | "purchased_gold" | "sdk_subscription" | "sdk_earned" | "sdk_top_up" | "total", number>;
+  total_spendable?: number | null;
+  owner_budget_enabled: boolean;
+  owner_budget_remaining?: number | null;
+  owner_daily_allowance_remaining?: number | null;
   [key: string]: unknown;
 }
 
@@ -27,21 +33,13 @@ export type WalletTransactionsResponse = PaginatedResponse<WalletTransaction>;
 export class WalletResource {
   constructor(private readonly client: DevaHttpClient) {}
 
-  /** Reads wallet balance via `GET /v1/agents/wallet/balance`. */
+  /** Reads wallet balance via `GET /v1/agents/balance`. */
   balance(): Promise<WalletBalance> {
-    return this.client.request<WalletBalance>({ method: "GET", path: "/v1/agents/wallet/balance" });
+    return this.client.request<WalletBalance>({ method: "GET", path: "/v1/agents/balance" });
   }
 
-  /** Lists wallet transactions via `GET /v1/agents/wallet/transactions`. */
-  transactions(input: WalletTransactionsRequest = {}): Promise<WalletTransactionsResponse> {
-    return this.client.request<WalletTransactionsResponse>({
-      method: "GET",
-      path: "/v1/agents/wallet/transactions",
-      query: {
-        limit: input.limit,
-        cursor: input.cursor,
-        type: input.type
-      }
-    });
+  /** @deprecated Not supported by the live API; rejects without a network request. */
+  transactions(_input: WalletTransactionsRequest = {}): Promise<WalletTransactionsResponse> {
+    return Promise.reject(new DevaError({ code: "unsupported_operation", message: "Wallet transactions are not supported by the live API." }));
   }
 }
