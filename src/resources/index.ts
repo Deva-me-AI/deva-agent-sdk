@@ -7,6 +7,7 @@ export * from "./kv.js";
 export * from "./messaging.js";
 export * from "./models.js";
 export * from "./profile.js";
+export * from "./resources.js";
 export * from "./search.js";
 export * from "./social.js";
 export * from "./transcription.js";
