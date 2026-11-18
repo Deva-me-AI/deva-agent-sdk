@@ -167,7 +167,7 @@ export class DevaHttpClient {
             this.fetchImpl,
             this.baseUrl,
             () => this.apiKey,
-            options.x402?.walletPayPath ?? "/v1/agents/wallet/pay"
+            options.x402?.walletPayPath
           )
         : undefined);
   }

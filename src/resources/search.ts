@@ -22,6 +22,11 @@ export interface WebSearchResponse {
 
 export interface XSearchRequest {
   query: string;
+  count?: number;
+  search_type?: "Latest" | "Top";
+  source?: "anyapi" | "monid" | "rapidapi";
+  max_price?: number;
+  /** @deprecated Use count. */
   max_results?: number;
   [key: string]: unknown;
 }
@@ -29,18 +34,27 @@ export interface XSearchRequest {
 export interface XTweet {
   id?: string;
   text?: string;
-  author_username?: string;
+  author?: { id?: string | null; username?: string | null; name?: string | null };
+  metrics?: { likes?: number | null; retweets?: number | null; replies?: number | null; views?: number | null };
   created_at?: string;
   [key: string]: unknown;
 }
 
 export interface XSearchResponse {
-  results?: XTweet[];
+  success: boolean;
+  tweets: XTweet[];
+  total: number;
+  credits_cost: number;
+  query?: string;
+  search_type?: string;
+  username?: string;
   [key: string]: unknown;
 }
 
 export interface XUserTweetsRequest {
   username: string;
+  count?: number;
+  /** @deprecated Use count. */
   limit?: number;
 }
 
@@ -57,23 +71,27 @@ export class SearchResource {
     });
   }
 
-  /** Performs X/Twitter search (15 ₭ per search). `POST /v1/agents/resources/x/search`. */
+  /** Performs X/Twitter search (15 ₭ per search). `POST /v1/tools/x/search`. */
   x(payload: XSearchRequest): Promise<XSearchResponse> {
     return this.client.request<XSearchResponse>({
       method: "POST",
-      path: "/v1/agents/resources/x/search",
-      body: payload
+      path: "/v1/tools/x/search",
+      body: {
+        query: payload.query,
+        count: payload.count ?? payload.max_results,
+        search_type: payload.search_type,
+        source: payload.source,
+        max_price: payload.max_price
+      }
     });
   }
 
-  /** Fetches tweets for a specific X user (15 ₭ per request). `GET /v1/agents/resources/x/user/{username}/tweets`. */
+  /** Fetches user tweets via POST /v1/tools/x/user-tweets. */
   xUserTweets(input: XUserTweetsRequest): Promise<XSearchResponse> {
     return this.client.request<XSearchResponse>({
-      method: "GET",
-      path: `/v1/agents/resources/x/user/${encodeURIComponent(input.username)}/tweets`,
-      query: {
-        limit: input.limit
-      }
+      method: "POST",
+      path: "/v1/tools/x/user-tweets",
+      body: { username: input.username, count: input.count ?? input.limit }
     });
   }
 }

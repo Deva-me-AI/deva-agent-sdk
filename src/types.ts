@@ -20,7 +20,9 @@ export interface DevaClientOptions {
 export interface X402Options {
   enabled?: boolean;
   maxRetries?: number;
+  /** Custom deployments only; requires walletPayPath and autoPayPolicy. */
   walletAutoPay?: boolean;
+  /** Explicit custom payment endpoint; the live API has no default wallet pay route. */
   walletPayPath?: string;
   autoPayPolicy?: X402AutoPayPolicy;
   payer?: X402Payer;

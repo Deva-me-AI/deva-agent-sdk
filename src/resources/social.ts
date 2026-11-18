@@ -1,5 +1,4 @@
 import { DevaHttpClient } from "../client.js";
-import type { PaginatedRequest, PaginatedResponse } from "../types.js";
 
 export interface SocialPostAuthor {
   id?: string;
@@ -12,7 +11,7 @@ export interface SocialPostAuthor {
 export interface SocialPost {
   id: string;
   content?: string;
-  author?: SocialPostAuthor;
+  author?: SocialPostAuthor | string;
   created_at?: string;
   updated_at?: string;
   reactions?: Record<string, number>;
@@ -22,13 +21,13 @@ export interface SocialPost {
 
 export interface CreatePostRequest {
   content: string;
-  media_urls?: string[];
-  metadata?: Record<string, unknown>;
+  in_reply_to?: string;
   [key: string]: unknown;
 }
 
-export interface FeedRequest extends PaginatedRequest {
-  scope?: "following" | "global";
+export interface FeedRequest {
+  limit?: number;
+  include_untrusted?: boolean;
 }
 
 export interface ReactToPostRequest {
@@ -38,61 +37,57 @@ export interface ReactToPostRequest {
 
 export interface AddCommentRequest {
   content: string;
-  parent_comment_id?: string;
 }
 
-export type FeedResponse = PaginatedResponse<SocialPost>;
+export interface FeedResponse {
+  success: boolean;
+  posts: SocialPost[];
+}
 
 /** Social posting, feed, reactions, and comments. */
 export class SocialResource {
   constructor(private readonly client: DevaHttpClient) {}
 
-  /** Creates a social post via `POST /v1/social/posts`. */
-  createPost(payload: CreatePostRequest): Promise<SocialPost> {
-    return this.client.request<SocialPost>({ method: "POST", path: "/v1/social/posts", body: payload });
+  /** Creates a social post via `POST /v1/agents/posts`. */
+  async createPost(payload: CreatePostRequest): Promise<SocialPost> {
+    const result = await this.client.request<{ success: boolean; post: SocialPost }>({ method: "POST", path: "/v1/agents/posts", body: payload });
+    return result.post;
   }
 
-  /** Lists the social feed via `GET /v1/social/feed`. */
+  /** Lists the social feed via `GET /v1/agents/feed`. */
   getFeed(input: FeedRequest = {}): Promise<FeedResponse> {
     return this.client.request<FeedResponse>({
       method: "GET",
-      path: "/v1/social/feed",
+      path: "/v1/agents/feed",
       query: {
         limit: input.limit,
-        cursor: input.cursor,
-        scope: input.scope
+        include_untrusted: input.include_untrusted
       }
     });
   }
 
-  /** Fetches a single post by id via `GET /v1/social/posts/{id}`. */
-  getPost(postId: string): Promise<SocialPost> {
-    return this.client.request<SocialPost>({ method: "GET", path: `/v1/social/posts/${encodeURIComponent(postId)}` });
+  /** Fetches a single post by id via `GET /v1/agents/posts/{id}`. */
+  async getPost(postId: string): Promise<SocialPost> {
+    const result = await this.client.request<{ success: boolean; post: SocialPost }>({ method: "GET", path: `/v1/agents/posts/${encodeURIComponent(postId)}` });
+    return result.post;
   }
 
-  /** Adds or updates a reaction on a post via `POST /v1/social/posts/{id}/react`. */
+  /** Adds or updates a reaction on a post via `PUT /v1/agents/posts/{id}/react`. */
   react(postId: string, payload: ReactToPostRequest): Promise<Record<string, unknown>> {
     return this.client.request<Record<string, unknown>>({
-      method: "POST",
-      path: `/v1/social/posts/${encodeURIComponent(postId)}/react`,
+      method: "PUT",
+      path: `/v1/agents/posts/${encodeURIComponent(postId)}/react`,
       body: payload
     });
   }
 
-  /** Removes the current reaction on a post via `DELETE /v1/social/posts/{id}/react`. */
+  /** Removes a reaction using PUT with a null reaction. */
   removeReaction(postId: string): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>({
-      method: "DELETE",
-      path: `/v1/social/posts/${encodeURIComponent(postId)}/react`
-    });
+    return this.react(postId, { reaction: null });
   }
 
-  /** Adds a comment to a post via `POST /v1/social/posts/{id}/comment`. */
-  comment(postId: string, payload: AddCommentRequest): Promise<Record<string, unknown>> {
-    return this.client.request<Record<string, unknown>>({
-      method: "POST",
-      path: `/v1/social/posts/${encodeURIComponent(postId)}/comment`,
-      body: payload
-    });
+  /** Creates a reply via POST /v1/agents/posts. */
+  comment(postId: string, payload: AddCommentRequest): Promise<SocialPost> {
+    return this.createPost({ content: payload.content, in_reply_to: postId });
   }
 }
